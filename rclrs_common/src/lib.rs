@@ -1,5 +1,8 @@
 #![no_std]
 
+extern crate alloc;
+pub mod msg_utils;
+
 pub mod error {
     use core::{
         convert::TryFrom,
