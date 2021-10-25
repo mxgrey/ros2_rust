@@ -1,14 +1,11 @@
 [package]
-name = "r2r_msg_gen"
-version = "0.2.1"
-authors = ["Martin Dahl <martin.dahl@gmail.com>"]
+name = "rclrs_msg_gen"
+version = "0.1.0"
+authors = ["Martin Dahl <martin.dahl@gmail.com>", "Jacob Hassold <jhassold@dcscorp.com>"]
 description = "Internal dependency to the r2r crate."
 license = "MIT OR Apache-2.0"
 edition = "2018"
 readme = "README.md"
-homepage = "https://github.com/sequenceplanner/r2r"
-repository = "https://github.com/sequenceplanner/r2r"
-documentation = "https://sequenceplanner.github.io/r2r/"
 
 [dependencies]
 lazy_static = "1.4.0"
@@ -20,3 +17,4 @@ bindgen = "0.59.1"
 # r2r_rcl = { path = "../r2r_rcl", version = "0.2.0" }
 # r2r_common = { path = "../r2r_common", version = "0.2.0" }
 heck = "0.3.2"
+rclrs_msg_utilities = {path = "../rclrs_msg_utilities/Cargo.toml"}
