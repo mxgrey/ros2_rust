@@ -20,9 +20,10 @@ use crate::qos::QoSProfile;
 use crate::rcl_bindings::*;
 use crate::rcl_bindings::rmw_service_info_t;
 use crate::{Node, NodeHandle};
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use cstr_core::CString;
-use rclrs_msg_utilities::traits::MessageDefinition;
+use rclrs_msg_utilities::traits::{MessageDefinition, Message};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 
@@ -65,11 +66,22 @@ impl Drop for ServiceHandle {
     }
 }
 
+pub trait ServiceBase {
+    fn handle(&self) -> &ServiceHandle;
+
+    fn create_message(&self) -> Box<dyn Message>;
+
+    fn callback_fn(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode>;
+
+}
+
 pub struct Service<T>
 where
     T: MessageDefinition<T>,
 {
     pub handle: Arc<ServiceHandle>,
+    // The callback's lifetime should last as long as we need it to
+    pub callback: Mutex<Box<dyn FnMut(&T) + 'static>>,
     message: PhantomData<T>,
 }
 
@@ -87,9 +99,15 @@ where
     /// |Thread-Safe|No|
     /// |Uses Atomics|No|
     /// |Lock-Free|Yes|
-    pub fn new(node: &Node, topic: &str, qos: QoSProfile) -> Result<Self, RclReturnCode>
+    pub fn new<F>(
+        node: &Node,
+        topic: &str,
+        qos: QoSProfile,
+        callback: F,
+    ) -> Result<Self, RclReturnCode>
     where
         T: MessageDefinition<T>,
+        F: FnMut(&T) + Sized + 'static,
     {
         let mut service_handle = unsafe { rcl_get_zero_initialized_service() };
         let type_support = T::get_type_support() as *const rosidl_service_type_support_t;
@@ -117,12 +135,66 @@ where
 
         Ok(Self {
             handle,
+            callback: Mutex::new(Box::new(callback)),
             message: PhantomData,
         })
     }
 
-    pub fn take_request_with_info(&self,  _request_header: &rmw_service_info_t, _request_message: &T) -> Result<bool, RclReturnCode> {
+    pub fn take_request_with_info(&self,  request_header: &mut rmw_service_info_t, request: &mut T) -> Result<(), RclReturnCode> {
+        let handle = &mut *self.handle.lock();
+        let request_handle = request.get_native_message();
+        let ret = unsafe {
+            rcl_take_request_with_info(
+                handle as *const _,
+                request_header as *mut _,
+                request_handle as *mut _)
+        };
+        request.read_handle(request_handle);
+        request.destroy_native_message(request_handle);
+        ret.ok()
+    }
 
-        Ok(false)
+    pub fn take_request(&self, request: &mut T) -> Result<(), RclReturnCode> {
+        let handle = &mut *self.handle.lock();
+        let request_handle = request.get_native_message();
+        let ret = unsafe {
+            rcl_take_request(
+                handle as *const _,
+                core::ptr::null_mut(),
+                request_handle as *mut _,
+            )
+        };
+        request.read_handle(request_handle);
+        request.destroy_native_message(request_handle);
+        ret.ok()
+    }
+
+    fn callback_ext(
+        &self,
+        message: Box<dyn Message>,
+    ) -> Result<(), RclReturnCode> {
+        let msg = message
+            .downcast_ref()
+            .ok_or(RclReturnCode::Error)?;
+        (&mut *self.callback.lock())(msg);
+        Ok(())
+    }
+
+}
+
+impl<T> ServiceBase for Service<T>
+where
+    T: MessageDefinition<T> + core::default::Default,
+{
+    fn handle(&self) -> &ServiceHandle {
+        self.handle.borrow()
+    }
+
+    fn create_message(&self) -> Box<dyn Message> {
+        Box::new(T::default())
+    }
+
+    fn callback_fn(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode> {
+        self.callback_ext(message)
     }
 }

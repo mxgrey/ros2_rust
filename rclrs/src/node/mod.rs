@@ -51,6 +51,7 @@ pub struct Node {
     handle: Arc<NodeHandle>,
     pub(crate) context: Arc<ContextHandle>,
     pub(crate) subscriptions: Vec<Weak<dyn SubscriptionBase>>,
+    pub(crate) services: Vec<Weak<dyn ServiceBase>>,
 }
 
 impl Node {
@@ -88,6 +89,7 @@ impl Node {
             handle,
             context: context.handle.clone(),
             subscriptions: alloc::vec![],
+            services: alloc::vec![],
         })
     }
 
@@ -118,5 +120,20 @@ impl Node {
         self.subscriptions
             .push(Arc::downgrade(&subscription) as Weak<dyn SubscriptionBase>);
         Ok(subscription)
+    }
+
+    pub fn create_service<T, F>(
+        &mut self,
+        topic: &str,
+        qos: QoSProfile,
+        callback: F,
+    ) -> Result<Arc<Service<T>>, RclReturnCode>
+    where
+        T: MessageDefinition<T> + Default,
+        F: FnMut(&T) + Sized + 'static,
+    {
+        let service = Arc::new(Service::<T>::new(self, topic, qos, callback)?);
+        self.services.push(Arc::downgrade(&service) as Weak<dyn ServiceBase>);
+        Ok(service)
     }
 }
