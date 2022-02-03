@@ -168,14 +168,13 @@ where
         };
         message.read_handle(message_handle);
         message.destroy_native_message(message_handle);
-        ret.ok().map_err(|err| err.into())
+        ret.ok()
     }
 
     fn callback_ext(
         &self,
         message: Box<dyn Message>,
     ) -> Result<(), RclReturnCode> {
-        let msg = message.downcast_ref::<T>().unwrap();
         let msg = message
             .downcast_ref()
             .unwrap();
