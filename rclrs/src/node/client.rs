@@ -62,6 +62,14 @@ mod PendingRequestCollection {
             }
         }
 
+        /// Add a request to the requests collection.
+        /// 
+        /// In systems with [`std`] enabled, this also stores a timestamp as to when the callback was stored.
+        /// If [`std`] is not enabled, only the callback is stored, and time-related pruning functions are disabled.
+        /// 
+        /// # Parameters
+        /// * `request_id` - The request ID returned by [`Client::send_request`]
+        /// * `callback` - The callback to execute on the returned response (when it comes)
         pub(crate) fn add_request(
             &mut self,
             request_id: &i64,
@@ -84,7 +92,7 @@ mod PendingRequestCollection {
         /// that never got a reply from the server.
         ///
         /// # Parameters
-        /// * `request_id` - The request ID returned by [`async_send_request()`]
+        /// * `request_id` - The request ID returned by [`Client::send_request()`]
         /// * returns - `true` when a pending request was removed, `false` if not (e.g. a response was recieved)
         pub(crate) fn remove_pending_request(&mut self, request_id: &i64) -> bool {
             self.requests_collection.remove(request_id).is_some()
@@ -104,7 +112,7 @@ mod PendingRequestCollection {
         ///
         /// # Parameters
         /// * `time_point` - Requests that were sent before this point are going to be removed.
-        /// returns - The number of pending requests that were removed.
+        /// * returns - The number of pending requests that were removed.
         #[cfg(feature = "std")]
         pub(crate) fn prune_requests_older_than(&mut self, time_point: &SystemTime) -> usize {
             let old_size = self.requests_collection.len();
@@ -113,6 +121,11 @@ mod PendingRequestCollection {
             old_size - self.requests_collection.len()
         }
 
+        /// Grab and remove callback from requests_collection corresponding to passed id.
+        /// 
+        /// # Parameters
+        /// * `request_id` - The request ID returned by [`Client::send_request`].
+        /// * returns - The callback (if it exists) or [`None`]
         pub(crate) fn get_and_erase_pending_request(
             &mut self,
             request_id: &i64,
