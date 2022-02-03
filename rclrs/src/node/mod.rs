@@ -1,6 +1,6 @@
 use alloc::{
     sync::{Arc, Weak},
-    vec::Vec,
+    vec::Vec, boxed::Box,
 };
 
 use crate::error::{RclReturnCode, ToResult};
@@ -53,8 +53,8 @@ pub struct Node {
     handle: Arc<NodeHandle>,
     pub(crate) context: Arc<ContextHandle>,
     pub(crate) subscriptions: Vec<Weak<dyn SubscriptionBase>>,
-    pub(crate) services: Vec<Weak<dyn ServiceBase>>,
-    pub(crate) clients: Vec<Weak<dyn ClientBase>>,
+    pub(crate) services: Vec<Weak<dyn ServiceBase<dyn ServiceType>>>,
+    pub(crate) clients: Vec<Weak<dyn ClientBase<Box<dyn ServiceType>>>>,
 }
 
 impl Node {
@@ -141,15 +141,15 @@ impl Node {
         Ok(service)
     }
 
-    pub fn create_client<T>(
+    pub fn create_client<ST>(
         &mut self,
         topic: &str,
         qos: QoSProfile
-    ) -> Result<Arc<Client<T>>, RclReturnCode>
+    ) -> Result<Arc<Client<ST>>, RclReturnCode>
     where
-        T: MessageDefinition<T> + Default,
+        ST: ServiceType + Default,
     {
-        let client = Arc::new(Client::<T>::new(self, topic, qos)?);
+        let client = Arc::new(Client::<ST>::new(self, topic, qos)?);
         self.clients.push(Arc::downgrade(&client) as Weak<dyn ClientBase>);
         Ok(client)
     }

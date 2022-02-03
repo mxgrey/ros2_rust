@@ -22,7 +22,7 @@ use crate::{Node, NodeHandle};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use cstr_core::CString;
-use rclrs_msg_utilities::traits::{MessageDefinition, Message};
+use rclrs_msg_utilities::traits::{Message, ServiceType};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 
@@ -65,25 +65,26 @@ impl Drop for ClientHandle {
     }
 }
 
-pub trait ClientBase {
+pub trait ClientBase<ST> 
+where
+    ST: ServiceType,
+{
     fn handle(&self) -> &ClientHandle;
 
-    fn create_message(&self) -> Box<dyn Message>;
-
-    fn send_request(&self, request: Box<dyn Message>) -> Result<i64, RclReturnCode>;
+    fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode>;
 }
 
-pub struct Client<T>
+pub struct Client<ST>
 where
-    T: MessageDefinition<T>
+    ST: ServiceType,
 {
     pub handle: Arc<ClientHandle>,
-    message: PhantomData<T>,
+    message: PhantomData<ST>,
 }
 
-impl<T> Client<T>
+impl<ST> Client<ST>
 where
-    T: MessageDefinition<T>,
+    ST: ServiceType,
 {
     /// Creates and initializes a non-action-based client.
     /// 
@@ -101,7 +102,7 @@ where
     ) -> Result<Self, RclReturnCode>
     {
         let mut client_handle = unsafe { rcl_get_zero_initialized_client() };
-        let type_support = T::get_type_support() as *const rosidl_service_type_support_t;
+        let type_support = ST::get_type_support() as *const rosidl_service_type_support_t;
         let topic_c_string = CString::new(topic).unwrap();  // If the topic name is unrepresentable as a c-string, RCL will be unable to use it
         let node_handle = &mut *node.handle.lock();
 
@@ -141,7 +142,7 @@ where
         Ok(is_ready)
     }
 
-    fn take_response(&self, response: &mut T) -> Result<(), RclReturnCode> {
+    fn take_response(&self, response: &mut ST::Response) -> Result<(), RclReturnCode> {
         let handle = & *self.handle.lock();
         let response_handle = response.get_native_message();
         let ret = unsafe {
@@ -156,7 +157,7 @@ where
         ret.ok()
     }
 
-    fn send_request(&self, request: Box<dyn Message>) -> Result<i64, RclReturnCode> {
+    fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode> {
         let handle = & *self.handle.lock();
         let request_handle = request.get_native_message();
         let sequence_number = core::ptr::null_mut();
@@ -172,19 +173,15 @@ where
 
 }
 
-impl<T> ClientBase for Client<T>
+impl<ST> ClientBase<ST> for Client<ST>
 where
-    T: MessageDefinition<T> + core::default::Default,
+    ST: ServiceType + core::default::Default,
 {
     fn handle(&self) -> &ClientHandle {
         self.handle.borrow()
     }
 
-    fn create_message(&self) -> Box<dyn Message> {
-        Box::new(T::default())
-    }
-
-    fn send_request(&self, request: Box<dyn Message>) -> Result<i64, RclReturnCode> {
+    fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode> {
         self.send_request(request)
     }
 

@@ -65,12 +65,13 @@ impl Drop for ServiceHandle {
     }
 }
 
-pub trait ServiceBase {
+pub trait ServiceBase<ST>
+where
+    ST: ServiceType
+{
     fn handle(&self) -> &ServiceHandle;
 
-    // fn create_message(&self) -> Box<dyn Message>;
-
-    fn callback_fn(&self, message: Box<dyn Message>) -> Result<Box<dyn Message>, RclReturnCode>;
+    fn callback_fn(&self, message: ST::Request) -> Result<ST::Response, RclReturnCode>;
 
 }
 
@@ -193,7 +194,7 @@ where
 
 }
 
-impl<ST> ServiceBase for Service<ST>
+impl<ST> ServiceBase<ST> for Service<ST>
 where
     ST: ServiceType + core::default::Default,
 {
@@ -205,7 +206,7 @@ where
     //     Box::new(ST::default())
     // }
 
-    fn callback_fn(&self, message: Box<dyn Message>) -> Result<Box<dyn Message>, RclReturnCode>
+    fn callback_fn(&self, message: ST::Request) -> Result<ST::Response, RclReturnCode>
     {
         self.callback_ext(message)
     }
