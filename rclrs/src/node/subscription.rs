@@ -53,7 +53,7 @@ impl Drop for SubscriptionHandle {
 pub trait SubscriptionBase {
     fn handle(&self) -> &SubscriptionHandle;
     fn create_message(&self) -> Box<dyn Message>;
-    fn callback_fn(&self, message: Box<dyn Message>) -> ();
+    fn callback_fn(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode>;
 
     /// Ask RMW for the data
     ///
@@ -195,7 +195,7 @@ where
         Box::new(T::default())
     }
 
-    fn callback_fn(&self, message: Box<dyn Message>) {
-        self.callback_ext(message);
+    fn callback_fn(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode> {
+        self.callback_ext(message)
     }
 }
