@@ -18,8 +18,13 @@
 use crate::error::{RclReturnCode, ToResult};
 use crate::qos::QoSProfile;
 use crate::rcl_bindings::*;
+use crate::rcl_bindings::rmw_service_info_t;
 use crate::{Node, NodeHandle};
 use alloc::sync::Arc;
+use cstr_core::CString;
+use rclrs_msg_utilities::traits::MessageDefinition;
+use core::borrow::Borrow;
+use core::marker::PhantomData;
 
 #[cfg(not(feature = "std"))]
 use spin::{Mutex, MutexGuard};
@@ -29,5 +34,95 @@ use parking_lot::{Mutex, MutexGuard};
 
 pub struct ServiceHandle {
     handle: Mutex<rcl_service_t>,
-    service_handle: Arc<NodeHandle>,
+    node_handle: Arc<NodeHandle>,
+}
+
+impl ServiceHandle {
+    fn node_handle(&self) -> &NodeHandle {
+        self.node_handle.borrow()
+    }
+
+    fn get_mut(&mut self) -> &mut rcl_service_t {
+        self.handle.get_mut()
+    }
+
+    fn lock(&self) -> MutexGuard<rcl_service_t> {
+        self.handle.lock()
+    }
+
+    fn try_lock(&self) -> Option<MutexGuard<rcl_service_t>> {
+        self.handle.try_lock()
+    }
+}
+
+impl Drop for ServiceHandle {
+    fn drop(&mut self) {
+        let handle = self.handle.get_mut();
+        let node_handle = &mut *self.node_handle.lock();
+        unsafe {
+            rcl_service_fini(handle as *mut _, node_handle as *mut _);
+        }
+    }
+}
+
+pub struct Service<T>
+where
+    T: MessageDefinition<T>,
+{
+    pub handle: Arc<ServiceHandle>,
+    message: PhantomData<T>,
+}
+
+impl<T> Service<T>
+where
+    T: MessageDefinition<T>,
+{
+    /// Creates and initializes a non-action-based service.
+    /// 
+    /// Underlying _RCL_ information:
+    /// 
+    /// |Attribute|Adherence|
+    /// |---------|---------|
+    /// |Allocates Memory|Yes|
+    /// |Thread-Safe|No|
+    /// |Uses Atomics|No|
+    /// |Lock-Free|Yes|
+    pub fn new(node: &Node, topic: &str, qos: QoSProfile) -> Result<Self, RclReturnCode>
+    where
+        T: MessageDefinition<T>,
+    {
+        let mut service_handle = unsafe { rcl_get_zero_initialized_service() };
+        let type_support = T::get_type_support() as *const rosidl_service_type_support_t;
+        let topic_c_string = CString::new(topic).unwrap();  // If the topic name is unrepresentable as a c-string, RCL will be unable to use it
+        let node_handle = &mut *node.handle.lock();
+
+        unsafe {
+            let mut service_options = rcl_service_get_default_options();
+            service_options.qos = qos.into();
+
+            rcl_service_init(
+                &mut service_handle as *mut _,
+                node_handle as *mut _,
+                type_support,
+                topic_c_string.as_ptr(),
+                &service_options as *const _,
+            )
+            .ok()?;
+        }
+        
+        let handle = Arc::new(ServiceHandle {
+            handle: Mutex::new(service_handle),
+            node_handle: node.handle.clone(),
+        });
+
+        Ok(Self {
+            handle,
+            message: PhantomData,
+        })
+    }
+
+    pub fn take_request_with_info(&self,  _request_header: &rmw_service_info_t, _request_message: &T) -> Result<bool, RclReturnCode> {
+
+        Ok(false)
+    }
 }
