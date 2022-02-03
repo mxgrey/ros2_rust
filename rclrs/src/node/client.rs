@@ -19,6 +19,7 @@ use crate::error::{RclReturnCode, ToResult};
 use crate::qos::QoSProfile;
 use crate::rcl_bindings::*;
 use crate::{Node, NodeHandle};
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use cstr_core::CString;
 use rclrs_msg_utilities::traits::{Message, ServiceType};
@@ -32,6 +33,7 @@ use spin::{Mutex, MutexGuard};
 use parking_lot::{Mutex, MutexGuard};
 
 mod PendingRequestCollection {
+    #[cfg(feature = "std")]
     use std::time::SystemTime;
 
     use alloc::boxed::Box;
@@ -42,7 +44,11 @@ mod PendingRequestCollection {
     where
         ST: ServiceType
     {
-        requests_collection: HashMap<i64, (SystemTime, Box<dyn FnOnce(ST::Response)>)>,
+        #[cfg(feature = "std")]
+        requests_collection: HashMap<i64, (SystemTime, Box<dyn FnOnce(ST::Response) + Send + Sync>)>,
+
+        #[cfg(not(feature = "std"))]
+        requests_collection: HashMap<i64, Box<dyn FnOnce(ST::Response) + Send + Sync>>,
     }
 
     impl<ST> PendingRequests<ST>
@@ -54,6 +60,15 @@ mod PendingRequestCollection {
                 requests_collection: HashMap::new(),
             }
         }
+
+        pub(crate) fn add_request(&mut self, request_id: &i64, callback: Box<dyn FnOnce(ST::Response) + Send + Sync>) {
+            #[cfg(not(feature = "std"))]
+            self.requests_collection.insert(*request_id, callback);
+
+            #[cfg(feature = "std")]
+            self.requests_collection.insert(*request_id, (SystemTime::now(), callback));
+        }
+
         /// Clean up a pending request.
         /// 
         /// This notifies the client that we have waited long enough for a response from the server
@@ -84,6 +99,7 @@ mod PendingRequestCollection {
         /// # Parameters
         /// * `time_point` - Requests that were sent before this point are going to be removed.
         /// returns - The number of pending requests that were removed.
+        #[cfg(feature = "std")]
         pub(crate) fn prune_requests_older_than(&mut self, time_point: &SystemTime) -> usize {
             let old_size = self.requests_collection.len();
             self.requests_collection.retain(| _, (tp, _) | *tp > *time_point);
@@ -216,18 +232,20 @@ where
         ret.ok()
     }
 
-    pub fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode> {
+    pub fn send_request(&mut self, request: ST::Request, callback: Box<dyn FnOnce(ST::Response) + Send + Sync>) -> Result<i64, RclReturnCode> {
         let handle = & *self.handle.lock();
         let request_handle = request.get_native_message();
         let sequence_number = core::ptr::null_mut();
-        unsafe {
+        let ret = unsafe {
             rcl_send_request(
                 handle as *const _, 
                 request_handle as *const _,
                 sequence_number)
             .ok().
             map(|_| *sequence_number)
-        }
+        }?;
+        self.pending_requests.add_request(&ret, callback);
+        Ok(ret)
     }
 
 }
