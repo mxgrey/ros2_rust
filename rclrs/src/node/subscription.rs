@@ -1,13 +1,13 @@
 use crate::error::ToResult;
 use crate::qos::QoSProfile;
-use crate::{RclReturnCode, SubscriberErrorCode, rcl_bindings::*, to_rcl_result};
+use crate::{rcl_bindings::*, to_rcl_result, RclReturnCode, SubscriberErrorCode};
 use crate::{Node, NodeHandle};
-use rclrs_msg_utilities::traits::{Message, MessageDefinition};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use cstr_core::CString;
+use rclrs_msg_utilities::traits::{Message, MessageDefinition};
 
 #[cfg(not(feature = "std"))]
 use spin::{Mutex, MutexGuard};
@@ -171,13 +171,8 @@ where
         ret.ok()
     }
 
-    fn callback_ext(
-        &self,
-        message: Box<dyn Message>,
-    ) -> Result<(), RclReturnCode> {
-        let msg = message
-            .downcast_ref()
-            .unwrap();
+    fn callback_ext(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode> {
+        let msg = message.downcast_ref().unwrap();
         (&mut *self.callback.lock())(msg);
         Ok(())
     }

@@ -137,20 +137,22 @@ impl Node {
         F: FnMut(&ST::Request) -> ST::Response + Sized + 'static,
     {
         let service = Arc::new(Service::<ST>::new(self, topic, qos, callback)?);
-        self.services.push(Arc::downgrade(&service) as Weak<dyn ServiceBase>);
+        self.services
+            .push(Arc::downgrade(&service) as Weak<dyn ServiceBase>);
         Ok(service)
     }
 
     pub fn create_client<ST>(
         &mut self,
         topic: &str,
-        qos: QoSProfile
+        qos: QoSProfile,
     ) -> Result<Arc<Client<ST>>, RclReturnCode>
     where
         ST: ServiceType + Default,
     {
         let client = Arc::new(Client::<ST>::new(self, topic, qos)?);
-        self.clients.push(Arc::downgrade(&client) as Weak<dyn ClientBase>);
+        self.clients
+            .push(Arc::downgrade(&client) as Weak<dyn ClientBase>);
         Ok(client)
     }
 }

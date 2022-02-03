@@ -21,10 +21,10 @@ use crate::rcl_bindings::*;
 use crate::{Node, NodeHandle};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use cstr_core::CString;
-use rclrs_msg_utilities::traits::{Message, ServiceType};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
+use cstr_core::CString;
+use rclrs_msg_utilities::traits::{Message, ServiceType};
 
 #[cfg(not(feature = "std"))]
 use spin::{Mutex, MutexGuard};
@@ -33,19 +33,21 @@ use spin::{Mutex, MutexGuard};
 use parking_lot::{Mutex, MutexGuard};
 
 mod PendingRequestCollection {
+    use core::fmt::Result;
     #[cfg(feature = "std")]
     use std::time::SystemTime;
 
     use alloc::boxed::Box;
     use hashbrown::HashMap;
     use rclrs_msg_utilities::traits::ServiceType;
-    
+
     pub(crate) struct PendingRequests<ST>
     where
-        ST: ServiceType
+        ST: ServiceType,
     {
         #[cfg(feature = "std")]
-        requests_collection: HashMap<i64, (SystemTime, Box<dyn FnOnce(ST::Response) + Send + Sync>)>,
+        requests_collection:
+            HashMap<i64, (SystemTime, Box<dyn FnOnce(ST::Response) + Send + Sync>)>,
 
         #[cfg(not(feature = "std"))]
         requests_collection: HashMap<i64, Box<dyn FnOnce(ST::Response) + Send + Sync>>,
@@ -53,7 +55,7 @@ mod PendingRequestCollection {
 
     impl<ST> PendingRequests<ST>
     where
-        ST: ServiceType
+        ST: ServiceType,
     {
         pub fn new() -> Self {
             Self {
@@ -61,22 +63,27 @@ mod PendingRequestCollection {
             }
         }
 
-        pub(crate) fn add_request(&mut self, request_id: &i64, callback: Box<dyn FnOnce(ST::Response) + Send + Sync>) {
+        pub(crate) fn add_request(
+            &mut self,
+            request_id: &i64,
+            callback: Box<dyn FnOnce(ST::Response) + Send + Sync>,
+        ) {
             #[cfg(not(feature = "std"))]
             self.requests_collection.insert(*request_id, callback);
 
             #[cfg(feature = "std")]
-            self.requests_collection.insert(*request_id, (SystemTime::now(), callback));
+            self.requests_collection
+                .insert(*request_id, (SystemTime::now(), callback));
         }
 
         /// Clean up a pending request.
-        /// 
+        ///
         /// This notifies the client that we have waited long enough for a response from the server
         /// to come; we have given up, and are not waiting for a response anymore.
-        /// 
+        ///
         /// Not calling this will make the client start using more memory for each request
         /// that never got a reply from the server.
-        /// 
+        ///
         /// # Parameters
         /// * `request_id` - The request ID returned by [`async_send_request()`]
         /// * returns - `true` when a pending request was removed, `false` if not (e.g. a response was recieved)
@@ -85,7 +92,7 @@ mod PendingRequestCollection {
         }
 
         /// Clean all pending requests.
-        /// 
+        ///
         /// # Parameters
         /// * returns - The number of pending requests that were removed.
         pub(crate) fn prune_pending_requests(&mut self) -> usize {
@@ -95,19 +102,27 @@ mod PendingRequestCollection {
         }
 
         /// Clean all pending requests older than a [`time_point`].
-        /// 
+        ///
         /// # Parameters
         /// * `time_point` - Requests that were sent before this point are going to be removed.
         /// returns - The number of pending requests that were removed.
         #[cfg(feature = "std")]
         pub(crate) fn prune_requests_older_than(&mut self, time_point: &SystemTime) -> usize {
             let old_size = self.requests_collection.len();
-            self.requests_collection.retain(| _, (tp, _) | *tp > *time_point);
+            self.requests_collection
+                .retain(|_, (tp, _)| *tp > *time_point);
             old_size - self.requests_collection.len()
         }
 
+        pub(crate) fn get_and_erase_pending_request(
+            &mut self,
+            request_id: &i64,
+        ) -> Option<Box<dyn FnOnce(ST::Response) + Send + Sync>> {
+            self.requests_collection
+                .remove(request_id)
+                .map(|(_, cb)| cb)
+        }
     }
-    
 }
 
 pub(crate) struct ClientHandle {
@@ -161,7 +176,7 @@ where
     ST: ServiceType,
 {
     /// Creates and initializes a non-action-based client.
-    /// 
+    ///
     /// Underlying _RCL_ information:
     /// |Attribute|Adherence|
     /// |---------|---------|
@@ -169,15 +184,10 @@ where
     /// |Thread-Safe|No|
     /// |Uses Atomics|No|
     /// |Lock-Free|Yes|
-    pub fn new(
-        node: &Node,
-        topic: &str,
-        qos: QoSProfile
-    ) -> Result<Self, RclReturnCode>
-    {
+    pub fn new(node: &Node, topic: &str, qos: QoSProfile) -> Result<Self, RclReturnCode> {
         let mut client_handle = unsafe { rcl_get_zero_initialized_client() };
         let type_support = ST::get_type_support() as *const rosidl_service_type_support_t;
-        let topic_c_string = CString::new(topic).unwrap();  // If the topic name is unrepresentable as a c-string, RCL will be unable to use it
+        let topic_c_string = CString::new(topic).unwrap(); // If the topic name is unrepresentable as a c-string, RCL will be unable to use it
         let node_handle = &mut *node.handle.lock();
 
         unsafe {
@@ -206,19 +216,22 @@ where
     }
 
     fn service_is_ready(&self) -> Result<bool, RclReturnCode> {
-        let node_handle = & *self.handle.node_handle.lock();
-        let client_handle = & *self.handle.handle.lock();
+        let node_handle = &*self.handle.node_handle.lock();
+        let client_handle = &*self.handle.handle.lock();
         let mut is_ready = false;
-        unsafe { rcl_service_server_is_available(
-            node_handle as *const _,
-            client_handle as *const _,
-            &mut is_ready as *mut _,
-        )}.ok()?;
+        unsafe {
+            rcl_service_server_is_available(
+                node_handle as *const _,
+                client_handle as *const _,
+                &mut is_ready as *mut _,
+            )
+        }
+        .ok()?;
         Ok(is_ready)
     }
 
     fn take_response(&self, response: &mut ST::Response) -> Result<(), RclReturnCode> {
-        let handle = & *self.handle.lock();
+        let handle = &*self.handle.lock();
         let response_handle = response.get_native_message();
         let ret = unsafe {
             rcl_take_response(
@@ -233,33 +246,37 @@ where
     }
 
     /// Send a request to the service server, and schedule a callback in the executor.
-    /// 
+    ///
     /// If the callback is never called (because we never got a reply for the service server),
     /// [`remove_pending_request`] has to be called with the returned request ID, or [`prune_pending_requests()`].
     /// Not doing so will make the [`Client`] instance use more memory each time a response is not
     /// recieved from the service server.
     /// In this case, it's convenient to setup a timer to clean up the pending requests.
-    /// 
+    ///
     /// # Parameters
     /// * `request` - The request to be sent
     /// * `callback` - The callback that will be called when we get a response for this request.
     /// * returns - The request ID representing the request just sent
-    pub fn send_request(&mut self, request: ST::Request, callback: Box<dyn FnOnce(ST::Response) + Send + Sync>) -> Result<i64, RclReturnCode> {
-        let handle = & *self.handle.lock();
+    pub fn send_request(
+        &mut self,
+        request: ST::Request,
+        callback: Box<dyn FnOnce(ST::Response) + Send + Sync>,
+    ) -> Result<i64, RclReturnCode> {
+        let handle = &*self.handle.lock();
         let request_handle = request.get_native_message();
         let sequence_number = core::ptr::null_mut();
         let ret = unsafe {
             rcl_send_request(
-                handle as *const _, 
+                handle as *const _,
                 request_handle as *const _,
-                sequence_number)
-            .ok().
-            map(|_| *sequence_number)
+                sequence_number,
+            )
+            .ok()
+            .map(|_| *sequence_number)
         }?;
         self.pending_requests.add_request(&ret, callback);
         Ok(ret)
     }
-
 }
 
 impl<ST> ClientBase for Client<ST>
@@ -269,5 +286,4 @@ where
     fn handle(&self) -> &ClientHandle {
         self.handle.borrow()
     }
-
 }

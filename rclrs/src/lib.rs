@@ -2,8 +2,8 @@
 extern crate alloc;
 extern crate core_error;
 extern crate downcast;
-extern crate rclrs_msg_utilities;
 extern crate hashbrown;
+extern crate rclrs_msg_utilities;
 
 #[cfg(feature = "std")]
 extern crate std;
