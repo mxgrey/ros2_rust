@@ -15,7 +15,7 @@ use spin::{Mutex, MutexGuard};
 #[cfg(feature = "std")]
 use parking_lot::{Mutex, MutexGuard};
 
-pub struct SubscriptionHandle {
+pub(crate) struct SubscriptionHandle {
     handle: Mutex<rcl_subscription_t>,
     node_handle: Arc<NodeHandle>,
 }
@@ -50,7 +50,7 @@ impl Drop for SubscriptionHandle {
 
 /// Trait to be implemented by concrete Subscriber structs
 /// See [`Subscription<T>`] for an example
-pub trait SubscriptionBase {
+pub(crate) trait SubscriptionBase {
     fn handle(&self) -> &SubscriptionHandle;
     fn create_message(&self) -> Box<dyn Message>;
     fn callback_fn(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode>;
@@ -105,7 +105,7 @@ pub struct Subscription<T>
 where
     T: Message,
 {
-    pub handle: Arc<SubscriptionHandle>,
+    pub(crate) handle: Arc<SubscriptionHandle>,
     // The callback's lifetime should last as long as we need it to
     pub callback: Mutex<Box<dyn FnMut(&T) + 'static>>,
     message: PhantomData<T>,

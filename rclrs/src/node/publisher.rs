@@ -15,7 +15,7 @@ use spin::{Mutex, MutexGuard};
 #[cfg(feature = "std")]
 use parking_lot::{Mutex, MutexGuard};
 
-pub struct PublisherHandle {
+pub(crate) struct PublisherHandle {
     handle: Mutex<rcl_publisher_t>,
     node_handle: Arc<NodeHandle>,
 }
@@ -53,7 +53,7 @@ pub struct Publisher<T>
 where
     T: MessageDefinition<T>,
 {
-    pub handle: Arc<PublisherHandle>,
+    pub(crate) handle: Arc<PublisherHandle>,
     message: PhantomData<T>,
 }
 

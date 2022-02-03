@@ -49,7 +49,7 @@ impl From<RclReturnCode> for WaitSetErrorResponse {
 
 impl Error for WaitSetErrorResponse {}
 
-pub struct WaitSet {
+pub(crate) struct WaitSet {
     pub wait_set: rcl_wait_set_t,
     initialized: bool,
 }

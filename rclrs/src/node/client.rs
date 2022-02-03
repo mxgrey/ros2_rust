@@ -32,7 +32,7 @@ use spin::{Mutex, MutexGuard};
 #[cfg(feature = "std")]
 use parking_lot::{Mutex, MutexGuard};
 
-pub struct ClientHandle {
+pub(crate) struct ClientHandle {
     handle: Mutex<rcl_client_t>,
     node_handle: Arc<NodeHandle>,
 }
@@ -65,19 +65,15 @@ impl Drop for ClientHandle {
     }
 }
 
-pub trait ClientBase {
+pub(crate) trait ClientBase {
     fn handle(&self) -> &ClientHandle;
-
-    // fn create_message(&self) -> Box<dyn Message>;
-
-    fn send_request(&self, request: Box<dyn Message>) -> Result<i64, RclReturnCode>;
 }
 
 pub struct Client<T>
 where
     T: ServiceType,
 {
-    pub handle: Arc<ClientHandle>,
+    pub(crate) handle: Arc<ClientHandle>,
     message: PhantomData<T>,
 }
 
@@ -156,7 +152,7 @@ where
         ret.ok()
     }
 
-    fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode> {
+    pub fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode> {
         let handle = & *self.handle.lock();
         let request_handle = request.get_native_message();
         let sequence_number = core::ptr::null_mut();
@@ -178,10 +174,6 @@ where
 {
     fn handle(&self) -> &ClientHandle {
         self.handle.borrow()
-    }
-
-    fn send_request(&self, request: Box<dyn Message>) -> Result<i64, RclReturnCode> {
-        self.send_request(request)
     }
 
 }

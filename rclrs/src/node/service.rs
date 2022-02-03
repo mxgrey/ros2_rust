@@ -32,7 +32,7 @@ use spin::{Mutex, MutexGuard};
 #[cfg(feature = "std")]
 use parking_lot::{Mutex, MutexGuard};
 
-pub struct ServiceHandle {
+pub(crate) struct ServiceHandle {
     handle: Mutex<rcl_service_t>,
     node_handle: Arc<NodeHandle>,
 }
@@ -65,7 +65,7 @@ impl Drop for ServiceHandle {
     }
 }
 
-pub trait ServiceBase {
+pub(crate) trait ServiceBase {
     fn handle(&self) -> &ServiceHandle;
 
     fn callback_fn(&self, message: Box<dyn Message>) -> Result<Box<dyn Message>, RclReturnCode>;
@@ -76,7 +76,7 @@ pub struct Service<T>
 where
     T: ServiceType,
 {
-    pub handle: Arc<ServiceHandle>,
+    pub(crate) handle: Arc<ServiceHandle>,
     // The callback's lifetime should last as long as we need it to
     pub callback: Mutex<Box<dyn FnMut(&T::Request) -> T::Response + 'static>>,
     message: PhantomData<T>,
@@ -174,11 +174,7 @@ where
         }
     }
 
-    // pub fn handle_request(&self, request_header: &mut rmw_request_id_t, request: &mut T) -> Result<(), RclReturnCode> {
-
-    // }
-
-    pub fn callback_ext(
+    fn callback_ext(
         &self,
         message: Box<dyn Message>,
     ) -> Result<Box<dyn Message>, RclReturnCode> {
