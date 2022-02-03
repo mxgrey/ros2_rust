@@ -1,6 +1,6 @@
 use alloc::{
     sync::{Arc, Weak},
-    vec::Vec, boxed::Box,
+    vec::Vec,
 };
 
 use crate::error::{RclReturnCode, ToResult};
@@ -53,8 +53,8 @@ pub struct Node {
     handle: Arc<NodeHandle>,
     pub(crate) context: Arc<ContextHandle>,
     pub(crate) subscriptions: Vec<Weak<dyn SubscriptionBase>>,
-    pub(crate) services: Vec<Weak<dyn ServiceBase<dyn ServiceType>>>,
-    pub(crate) clients: Vec<Weak<dyn ClientBase<Box<dyn ServiceType>>>>,
+    pub(crate) services: Vec<Weak<dyn ServiceBase>>,
+    pub(crate) clients: Vec<Weak<dyn ClientBase>>,
 }
 
 impl Node {

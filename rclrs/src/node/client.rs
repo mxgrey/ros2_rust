@@ -65,21 +65,20 @@ impl Drop for ClientHandle {
     }
 }
 
-pub trait ClientBase<ST> 
-where
-    ST: ServiceType,
-{
+pub trait ClientBase {
     fn handle(&self) -> &ClientHandle;
 
-    fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode>;
+    // fn create_message(&self) -> Box<dyn Message>;
+
+    fn send_request(&self, request: Box<dyn Message>) -> Result<i64, RclReturnCode>;
 }
 
-pub struct Client<ST>
+pub struct Client<T>
 where
-    ST: ServiceType,
+    T: ServiceType,
 {
     pub handle: Arc<ClientHandle>,
-    message: PhantomData<ST>,
+    message: PhantomData<T>,
 }
 
 impl<ST> Client<ST>
@@ -173,7 +172,7 @@ where
 
 }
 
-impl<ST> ClientBase<ST> for Client<ST>
+impl<ST> ClientBase for Client<ST>
 where
     ST: ServiceType + core::default::Default,
 {
@@ -181,7 +180,7 @@ where
         self.handle.borrow()
     }
 
-    fn send_request(&self, request: ST::Request) -> Result<i64, RclReturnCode> {
+    fn send_request(&self, request: Box<dyn Message>) -> Result<i64, RclReturnCode> {
         self.send_request(request)
     }
 
