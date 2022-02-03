@@ -14,6 +14,7 @@
 
 import os
 import pathlib
+# import sys
 
 from rosidl_cmake import convert_camel_case_to_lower_case_underscore
 from rosidl_cmake import expand_template
@@ -21,7 +22,7 @@ from rosidl_cmake import generate_files
 from rosidl_cmake import get_newest_modification_time
 from rosidl_cmake import read_generator_arguments
 
-from rosidl_parser.definition import AbstractGenericString
+from rosidl_parser.definition import AbstractGenericString, AbstractWString
 from rosidl_parser.definition import AbstractNestedType
 from rosidl_parser.definition import AbstractSequence
 from rosidl_parser.definition import BoundedSequence
@@ -50,6 +51,7 @@ def generate_rs(generator_arguments_file, typesupport_impls):
     modules = {}
     idl_content = IdlContent()
     for idl_tuple in args.get('idl_tuples', []):
+        # print(f"IDL location: {idl_tuple}", file=sys.stderr)
         idl_parts = idl_tuple.rsplit(':', 1)
         assert len(idl_parts) == 2
 
@@ -97,6 +99,7 @@ def generate_rs(generator_arguments_file, typesupport_impls):
         convert_camel_case_to_lower_case_underscore,
         'convert_lower_case_underscore_to_camel_case':
         convert_lower_case_underscore_to_camel_case,
+        'gen_c_function_prefix': gen_c_function_prefix,
         'get_builtin_rs_type': get_builtin_rs_type,
         'msg_specs': [],
         'srv_specs': [],
@@ -113,6 +116,9 @@ def generate_rs(generator_arguments_file, typesupport_impls):
         data['srv_specs'].append(('srv', service))
 
     if data['msg_specs']:
+        # message = data['msg_specs'][0][1]
+        # print(f"Message Object: {message}", file=sys.stderr)
+        # print(f"{dir(data['msg_specs'][0][1])}", file=sys.stderr)
         for template_file, generated_filenames in mapping_msgs.items():
             for generated_filename in generated_filenames:
                 generated_file = os.path.join(args['output_dir'],
@@ -124,6 +130,20 @@ def generate_rs(generator_arguments_file, typesupport_impls):
                     minimum_timestamp=latest_target_timestamp)
 
     if data['srv_specs']:
+        # service = data['srv_specs'][0][1]
+        # print(f"Service dir(): {dir(service)}\n", file=sys.stderr)
+        # print(f"Service namespaced_type dir(): {dir(service.namespaced_type)}\n", file=sys.stderr)
+        # print(f"Service namespaced_type.namespaced_name: {service.namespaced_type.namespaced_name()}", file=sys.stderr)
+        # # print(f"Service namespaced_type.namespaced_name dir(): {dir(service.namespaced_type.namespaced_name)}", file=sys.stderr)
+        # print(f"Service request_message dir(): {dir(service.request_message)}\n", file=sys.stderr)
+        # print(f"Service request_message members dir(): {dir(service.request_message.structure.members)}", file=sys.stderr)
+        # # print(f"Service request_message members: {*service.request_message.structure.members,}", file=sys.stderr)
+        # for member in service.request_message.structure.members:
+        #     print(f"{member}", sys.stderr)
+        # print(f"Service request_message members count: {service.request_message.structure.members.__doc__}")
+        # print(f"Service response_message dir(): {dir(service.response_message)}\n", file=sys.stderr)
+        # print(f"Service response_message members dir(): {dir(service.response_message.structure.members)}", file=sys.stderr)
+        # print(f"Service response_message members: {*service.response_message.structure.members,}", file=sys.stderr)
         for template_file, generated_filenames in mapping_srvs.items():
             for generated_filename in generated_filenames:
                 generated_file = os.path.join(args['output_dir'],
@@ -313,7 +333,10 @@ def get_builtin_c_type(type_):
         if type_.typename == 'uint64':
             return 'uint64_t'
     elif isinstance(type_, AbstractGenericString):
-        return 'const char *'
+        if isinstance(type_, AbstractWString):
+            return 'const uint16_t *'
+        else:
+            return 'const char *'
 
     assert False, "unknown type '%s'" % type_.typename
 
@@ -323,3 +346,6 @@ def get_c_type(type_, subfolder='msg'):
         return 'uintptr_t'
 
     return get_builtin_c_type(type_)
+
+def gen_c_function_prefix(package_name, subfolder, type_name):
+    return f"{package_name}_{subfolder}_{convert_camel_case_to_lower_case_underscore(type_name)}"

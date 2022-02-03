@@ -1,8 +1,10 @@
 #include "rosidl_runtime_c/string_functions.h"
+#include "rosidl_runtime_c/u16string_functions.h"
 #include "rosidl_runtime_c/message_type_support_struct.h"
 
 @{
 from rosidl_parser.definition import AbstractGenericString
+from rosidl_parser.definition import AbstractWString
 from rosidl_parser.definition import AbstractNestedType
 from rosidl_parser.definition import Array
 from rosidl_parser.definition import BasicType
@@ -21,22 +23,28 @@ for member in msg_spec.structure.members:
         else:
             pass
 
+c_function_prefix = gen_c_function_prefix(package_name, subfolder, type_name)
+
 msg_normalized_type = get_rs_type(msg_spec.structure.namespaced_type).replace('::', '__')
 }@
 
 #include "@(package_name)/@(subfolder)/@(convert_camel_case_to_lower_case_underscore(type_name)).h"
 
-uintptr_t @(package_name)_msg_@(convert_camel_case_to_lower_case_underscore(type_name))_get_type_support() {
+uintptr_t @(c_function_prefix)_get_type_support() {
     return (uintptr_t)ROSIDL_GET_MSG_TYPE_SUPPORT(@(package_name), @(subfolder), @(msg_spec.structure.namespaced_type.name));
 }
 
-uintptr_t @(package_name)_msg_@(convert_camel_case_to_lower_case_underscore(type_name))_get_native_message(
+uintptr_t @(c_function_prefix)_get_native_message(
   @(', '.join(c_fields))) {
       @(msg_normalized_type) *ros_message = @(msg_normalized_type)__create();
 @[for member in msg_spec.structure.members]@
 @[    if isinstance(member.type, Array)]@
 @[    elif isinstance(member.type, AbstractGenericString)]@
+@[        if isinstance(member.type, AbstractWString)]@
+      rosidl_runtime_c__U16String__assign(&(ros_message->@(member.name)), @(member.name));
+@[        else]@
       rosidl_runtime_c__String__assign(&(ros_message->@(member.name)), @(member.name));
+@[        end if]@
 @[    elif isinstance(member.type, BasicType)]@
       ros_message->@(member.name) = @(member.name);
 @[    end if]@
@@ -44,13 +52,13 @@ uintptr_t @(package_name)_msg_@(convert_camel_case_to_lower_case_underscore(type
     return (uintptr_t)ros_message;
 }
 
-void @(package_name)_msg_@(convert_camel_case_to_lower_case_underscore(type_name))_destroy_native_message(void * raw_ros_message) {
+void @(c_function_prefix)_destroy_native_message(void * raw_ros_message) {
       @(msg_normalized_type) * ros_message = raw_ros_message;
       @(msg_normalized_type)__destroy(ros_message);
 }
 
 @[for member in msg_spec.structure.members]@
-@(get_c_type(member.type)) @(package_name)_msg_@(convert_camel_case_to_lower_case_underscore(type_name))_@(member.name)_read_handle(uintptr_t message_handle) {
+@(get_c_type(member.type)) @(c_function_prefix)_@(member.name)_read_handle(uintptr_t message_handle) {
 @[    if isinstance(member.type, Array)]@
     (void)message_handle;
     return 0;
