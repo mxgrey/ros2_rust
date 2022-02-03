@@ -36,7 +36,7 @@ use parking_lot::{Mutex, MutexGuard};
 #[cfg(feature = "std")]
 use std::time::SystemTime;
 
-type ClientCallback<ST: ServiceType> = Box<dyn FnOnce(&ST::Response) + Send + Sync>;
+type ClientCallback<ST> = Box<dyn FnOnce(&<ST as ServiceType>::Response) + Send + Sync>;
 
 pub(crate) struct ClientHandle {
     handle: Mutex<rcl_client_t>,
@@ -308,8 +308,9 @@ where
     }
 
     fn handle_response(&mut self, message: Box<dyn Message>) -> Result<(), RclReturnCode> {
-        let response = message.downcast_ref::<ST::Response>().unwrap();
-        self.handle_response(response)
+        // let response = message.downcast_ref::<ST::Response>().unwrap();
+        let response = message.downcast::<ST::Response>().map_err(|_x| RclReturnCode::InvalidArgument)?;
+        self.handle_response(*response)
     }
 
 }
