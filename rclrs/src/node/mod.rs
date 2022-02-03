@@ -15,6 +15,8 @@ pub mod publisher;
 pub use self::publisher::*;
 pub mod subscription;
 pub use self::subscription::*;
+pub mod service;
+pub use self::service::*;
 
 #[cfg(not(feature = "std"))]
 use spin::{Mutex, MutexGuard};
