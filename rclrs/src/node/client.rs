@@ -25,6 +25,7 @@ use core::borrow::Borrow;
 use core::marker::PhantomData;
 use cstr_core::CString;
 use rclrs_msg_utilities::traits::{Message, ServiceType};
+use hashbrown::HashMap;
 
 #[cfg(not(feature = "std"))]
 use spin::{Mutex, MutexGuard};
@@ -32,110 +33,8 @@ use spin::{Mutex, MutexGuard};
 #[cfg(feature = "std")]
 use parking_lot::{Mutex, MutexGuard};
 
-mod PendingRequestCollection {
-    #[cfg(feature = "std")]
-    use std::time::SystemTime;
-
-    use alloc::boxed::Box;
-    use hashbrown::HashMap;
-    use rclrs_msg_utilities::traits::ServiceType;
-
-    pub(crate) struct PendingRequests<ST>
-    where
-        ST: ServiceType,
-    {
-        #[cfg(feature = "std")]
-        requests_collection:
-            HashMap<i64, (SystemTime, Box<dyn FnOnce(ST::Response) + Send + Sync>)>,
-
-        #[cfg(not(feature = "std"))]
-        requests_collection: HashMap<i64, Box<dyn FnOnce(ST::Response) + Send + Sync>>,
-    }
-
-    impl<ST> PendingRequests<ST>
-    where
-        ST: ServiceType,
-    {
-        pub fn new() -> Self {
-            Self {
-                requests_collection: HashMap::new(),
-            }
-        }
-
-        /// Add a request to the requests collection.
-        /// 
-        /// In systems with [`std`] enabled, this also stores a timestamp as to when the callback was stored.
-        /// If [`std`] is not enabled, only the callback is stored, and time-related pruning functions are disabled.
-        /// 
-        /// # Parameters
-        /// * `request_id` - The request ID returned by [`Client::send_request`]
-        /// * `callback` - The callback to execute on the returned response (when it comes)
-        pub(crate) fn add_request(
-            &mut self,
-            request_id: &i64,
-            callback: Box<dyn FnOnce(ST::Response) + Send + Sync>,
-        ) {
-            #[cfg(not(feature = "std"))]
-            self.requests_collection.insert(*request_id, callback);
-
-            #[cfg(feature = "std")]
-            self.requests_collection
-                .insert(*request_id, (SystemTime::now(), callback));
-        }
-
-        /// Clean up a pending request.
-        ///
-        /// This notifies the client that we have waited long enough for a response from the server
-        /// to come; we have given up, and are not waiting for a response anymore.
-        ///
-        /// Not calling this will make the client start using more memory for each request
-        /// that never got a reply from the server.
-        ///
-        /// # Parameters
-        /// * `request_id` - The request ID returned by [`Client::send_request()`]
-        /// * returns - `true` when a pending request was removed, `false` if not (e.g. a response was recieved)
-        pub(crate) fn remove_pending_request(&mut self, request_id: &i64) -> bool {
-            self.requests_collection.remove(request_id).is_some()
-        }
-
-        /// Clean all pending requests.
-        ///
-        /// # Parameters
-        /// * returns - The number of pending requests that were removed.
-        pub(crate) fn prune_pending_requests(&mut self) -> usize {
-            let old_size = self.requests_collection.len();
-            self.requests_collection.clear();
-            old_size
-        }
-
-        /// Clean all pending requests older than a [`time_point`].
-        ///
-        /// # Parameters
-        /// * `time_point` - Requests that were sent before this point are going to be removed.
-        /// * returns - The number of pending requests that were removed.
-        #[cfg(feature = "std")]
-        pub(crate) fn prune_requests_older_than(&mut self, time_point: &SystemTime) -> usize {
-            let old_size = self.requests_collection.len();
-            self.requests_collection
-                .retain(|_, (tp, _)| *tp > *time_point);
-            old_size - self.requests_collection.len()
-        }
-
-        /// Grab and remove callback from requests_collection corresponding to passed id.
-        /// 
-        /// # Parameters
-        /// * `request_id` - The request ID returned by [`Client::send_request`].
-        /// * returns - The callback (if it exists) or [`None`]
-        pub(crate) fn get_and_erase_pending_request(
-            &mut self,
-            request_id: &i64,
-        ) -> Option<Box<dyn FnOnce(ST::Response) + Send + Sync>> {
-            self.requests_collection
-                .remove(request_id)
-                .map(|(_, cb)| cb)
-        }
-    }
-}
+#[cfg(feature = "std")]
+use std::time::SystemTime;
 
 pub(crate) struct ClientHandle {
     handle: Mutex<rcl_client_t>,
@@ -180,7 +79,10 @@ where
 {
     pub(crate) handle: Arc<ClientHandle>,
     message: PhantomData<T>,
-    pub(crate) pending_requests: PendingRequestCollection::PendingRequests<T>,
+    #[cfg(feature = "std")]
+    pending_requests: HashMap<i64, (SystemTime, Box<dyn FnOnce(T::Response) + Send + Sync>)>,
+    #[cfg(not(feature = "std"))]
+    pending_requests: HashMap<i64, Box<dyn FnOnce(T::Response) + Send + Sync>>,
 }
 
 impl<ST> Client<ST>
@@ -223,10 +125,81 @@ where
         Ok(Self {
             handle,
             message: PhantomData,
-            pending_requests: PendingRequestCollection::PendingRequests::new(),
+            pending_requests: HashMap::new(),
         })
     }
 
+    /// Add a request to the requests collection.
+    /// 
+    /// In systems with [`std`] enabled, this also stores a timestamp as to when the callback was stored.
+    /// If [`std`] is not enabled, only the callback is stored, and time-related pruning functions are disabled.
+    /// 
+    /// # Parameters
+    /// * `request_id` - The request ID returned by [`Client::send_request`]
+    /// * `callback` - The callback to execute on the returned response (when it comes)
+    fn add_request(
+        &mut self,
+        request_id: &i64,
+        callback: Box<dyn FnOnce(ST::Response) + Send + Sync>,
+    ) {
+        #[cfg(not(feature = "std"))]
+        self.pending_requests.insert(*request_id, callback);
+        
+        #[cfg(feature = "std")]
+        self.pending_requests.insert(*request_id, (SystemTime::now(), callback));
+    }
+
+    /// Clean up a pending request.
+    ///
+    /// This notifies the client that we have waited long enough for a response from the server
+    /// to come; we have given up, and are not waiting for a response anymore.
+    ///
+    /// Not calling this will make the client start using more memory for each request
+    /// that never got a reply from the server.
+    ///
+    /// # Parameters
+    /// * `request_id` - The request ID returned by [`Client::send_request()`]
+    /// * returns - `true` when a pending request was removed, `false` if not (e.g. a response was recieved)
+    fn remove_pending_request(&mut self, request_id: &i64) -> bool {
+        self.pending_requests.remove(request_id).is_some()
+    }
+
+    /// Clean all pending requests.
+    ///
+    /// # Parameters
+    /// * returns - The number of pending requests that were removed.
+    fn prune_pending_requests(&mut self) -> usize {
+        let old_size = self.pending_requests.len();
+        self.pending_requests.clear();
+        old_size
+    }
+
+    /// Clean all pending requests older than a [`time_point`].
+    ///
+    /// # Parameters
+    /// * `time_point` - Requests that were sent before this point are going to be removed.
+    /// * returns - The number of pending requests that were removed.
+    #[cfg(feature = "std")]
+    fn prune_requests_older_than(&mut self, time_point: &SystemTime) -> usize {
+        let old_size = self.pending_requests.len();
+        self.pending_requests
+            .retain(|_, (tp, _)| *tp > *time_point);
+        old_size - self.pending_requests.len()
+    }
+
+    /// Grab and remove callback from requests_collection corresponding to passed id.
+    /// 
+    /// # Parameters
+    /// * `request_id` - The request ID returned by [`Client::send_request`].
+    /// * returns - The callback (if it exists) or [`None`]
+    fn get_and_erase_pending_request(
+        &mut self,
+        request_id: &i64,
+    ) -> Option<Box<dyn FnOnce(ST::Response) + Send + Sync>> {
+        self.pending_requests
+            .remove(request_id)
+            .map(|(_, cb)| cb)
+    }
     fn service_is_ready(&self) -> Result<bool, RclReturnCode> {
         let node_handle = &*self.handle.node_handle.lock();
         let client_handle = &*self.handle.handle.lock();
@@ -274,10 +247,10 @@ where
         request: ST::Request,
         callback: Box<dyn FnOnce(ST::Response) + Send + Sync>,
     ) -> Result<i64, RclReturnCode> {
-        let handle = &*self.handle.lock();
         let request_handle = request.get_native_message();
         let sequence_number = core::ptr::null_mut();
         let ret = unsafe {
+            let handle = &*self.handle.lock();
             rcl_send_request(
                 handle as *const _,
                 request_handle as *const _,
@@ -286,7 +259,7 @@ where
             .ok()
             .map(|_| *sequence_number)
         }?;
-        self.pending_requests.add_request(&ret, callback);
+        self.add_request(&ret, callback);
         Ok(ret)
     }
 }
