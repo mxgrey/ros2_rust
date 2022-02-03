@@ -145,6 +145,7 @@ pub enum ClientErrorCode {
     /// Failed to take a response from the client
     ClientTakeFailed = 501,
 }
+
 impl TryFrom<i32> for ClientErrorCode {
     type Error = i32;
     fn try_from(value: i32) -> Result<Self, Self::Error> {

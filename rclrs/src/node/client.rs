@@ -17,15 +17,15 @@
 
 use crate::error::{RclReturnCode, ToResult};
 use crate::qos::QoSProfile;
-use crate::rcl_bindings::*;
+use crate::{rcl_bindings::*, ClientErrorCode};
 use crate::{Node, NodeHandle};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 use cstr_core::CString;
-use rclrs_msg_utilities::traits::{Message, ServiceType};
 use hashbrown::HashMap;
+use rclrs_msg_utilities::traits::{Message, ServiceType};
 
 #[cfg(not(feature = "std"))]
 use spin::{Mutex, MutexGuard};
@@ -35,6 +35,8 @@ use parking_lot::{Mutex, MutexGuard};
 
 #[cfg(feature = "std")]
 use std::time::SystemTime;
+
+type ClientCallback<ST: ServiceType> = Box<dyn FnOnce(&ST::Response) + Send + Sync>;
 
 pub(crate) struct ClientHandle {
     handle: Mutex<rcl_client_t>,
@@ -71,6 +73,8 @@ impl Drop for ClientHandle {
 
 pub(crate) trait ClientBase {
     fn handle(&self) -> &ClientHandle;
+
+    fn handle_response(&mut self, message: Box<dyn Message>) -> Result<(), RclReturnCode>;
 }
 
 pub struct Client<T>
@@ -80,9 +84,9 @@ where
     pub(crate) handle: Arc<ClientHandle>,
     message: PhantomData<T>,
     #[cfg(feature = "std")]
-    pending_requests: HashMap<i64, (SystemTime, Box<dyn FnOnce(T::Response) + Send + Sync>)>,
+    pending_requests: HashMap<i64, (SystemTime, ClientCallback<T>)>,
     #[cfg(not(feature = "std"))]
-    pending_requests: HashMap<i64, Box<dyn FnOnce(T::Response) + Send + Sync>>,
+    pending_requests: HashMap<i64, ClientCallback<T>>,
 }
 
 impl<ST> Client<ST>
@@ -130,23 +134,24 @@ where
     }
 
     /// Add a request to the requests collection.
-    /// 
+    ///
     /// In systems with [`std`] enabled, this also stores a timestamp as to when the callback was stored.
     /// If [`std`] is not enabled, only the callback is stored, and time-related pruning functions are disabled.
-    /// 
+    ///
     /// # Parameters
     /// * `request_id` - The request ID returned by [`Client::send_request`]
     /// * `callback` - The callback to execute on the returned response (when it comes)
     fn add_request(
         &mut self,
         request_id: &i64,
-        callback: Box<dyn FnOnce(ST::Response) + Send + Sync>,
+        callback: ClientCallback<ST>,
     ) {
         #[cfg(not(feature = "std"))]
         self.pending_requests.insert(*request_id, callback);
-        
+
         #[cfg(feature = "std")]
-        self.pending_requests.insert(*request_id, (SystemTime::now(), callback));
+        self.pending_requests
+            .insert(*request_id, (SystemTime::now(), callback));
     }
 
     /// Clean up a pending request.
@@ -182,24 +187,22 @@ where
     #[cfg(feature = "std")]
     fn prune_requests_older_than(&mut self, time_point: &SystemTime) -> usize {
         let old_size = self.pending_requests.len();
-        self.pending_requests
-            .retain(|_, (tp, _)| *tp > *time_point);
+        self.pending_requests.retain(|_, (tp, _)| *tp > *time_point);
         old_size - self.pending_requests.len()
     }
 
     /// Grab and remove callback from requests_collection corresponding to passed id.
-    /// 
+    ///
     /// # Parameters
     /// * `request_id` - The request ID returned by [`Client::send_request`].
     /// * returns - The callback (if it exists) or [`None`]
     fn get_and_erase_pending_request(
         &mut self,
         request_id: &i64,
-    ) -> Option<Box<dyn FnOnce(ST::Response) + Send + Sync>> {
-        self.pending_requests
-            .remove(request_id)
-            .map(|(_, cb)| cb)
+    ) -> Option<ClientCallback<ST>> {
+        self.pending_requests.remove(request_id).map(|(_, cb)| cb)
     }
+
     fn service_is_ready(&self) -> Result<bool, RclReturnCode> {
         let node_handle = &*self.handle.node_handle.lock();
         let client_handle = &*self.handle.handle.lock();
@@ -230,6 +233,38 @@ where
         ret.ok()
     }
 
+    fn handle_response(&mut self, mut response: ST::Response) -> Result<(), RclReturnCode> {
+        let request_header = core::ptr::null_mut();
+        {
+            let handle = &*self.handle.lock();
+            let response_handle = response.get_native_message();
+            
+            // This is safe, because the type of the `ros_response` parameter is enforced to be the same as the type of
+            // the client. Additionally, we have allocated memory for the response to be copied into.
+            unsafe {
+                rcl_take_response(
+                    handle as *const _,
+                    request_header,
+                    response_handle as *mut _,
+                ).ok()?
+            };
+            // If we have reached this point, the response was successfully taken.
+            response.read_handle(response_handle);
+
+            // Delete the C copy of the message
+            response.destroy_native_message(response_handle);
+        }
+
+        // Retrieve the request callback
+        // This is safe, because the response has been successfully taken by this point
+        let callback = unsafe {
+            self.get_and_erase_pending_request(&(*request_header).sequence_number)
+                .ok_or_else(|| ClientErrorCode::ClientTakeFailed)?
+        };
+        (callback)(response.borrow());
+        Ok(())
+    }
+
     /// Send a request to the service server, and schedule a callback in the executor.
     ///
     /// If the callback is never called (because we never got a reply for the service server),
@@ -245,7 +280,7 @@ where
     pub fn send_request(
         &mut self,
         request: ST::Request,
-        callback: Box<dyn FnOnce(ST::Response) + Send + Sync>,
+        callback: ClientCallback<ST>
     ) -> Result<i64, RclReturnCode> {
         let request_handle = request.get_native_message();
         let sequence_number = core::ptr::null_mut();
@@ -271,4 +306,10 @@ where
     fn handle(&self) -> &ClientHandle {
         self.handle.borrow()
     }
+
+    fn handle_response(&mut self, message: Box<dyn Message>) -> Result<(), RclReturnCode> {
+        let response = message.downcast_ref::<ST::Response>().unwrap();
+        self.handle_response(response)
+    }
+
 }
