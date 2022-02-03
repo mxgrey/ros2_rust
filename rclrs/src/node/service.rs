@@ -18,12 +18,11 @@
 use crate::error::{RclReturnCode, ToResult};
 use crate::qos::QoSProfile;
 use crate::rcl_bindings::*;
-use crate::rcl_bindings::rmw_service_info_t;
 use crate::{Node, NodeHandle};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use cstr_core::CString;
-use rclrs_msg_utilities::traits::{MessageDefinition, Message};
+use rclrs_msg_utilities::traits::{Message, ServiceType};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 
@@ -69,25 +68,25 @@ impl Drop for ServiceHandle {
 pub trait ServiceBase {
     fn handle(&self) -> &ServiceHandle;
 
-    fn create_message(&self) -> Box<dyn Message>;
+    // fn create_message(&self) -> Box<dyn Message>;
 
-    fn callback_fn(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode>;
+    fn callback_fn(&self, message: Box<dyn Message>) -> Result<Box<dyn Message>, RclReturnCode>;
 
 }
 
 pub struct Service<T>
 where
-    T: MessageDefinition<T>,
+    T: ServiceType,
 {
     pub handle: Arc<ServiceHandle>,
     // The callback's lifetime should last as long as we need it to
-    pub callback: Mutex<Box<dyn FnMut(&T) + 'static>>,
+    pub callback: Mutex<Box<dyn FnMut(&T::Request) -> T::Response + 'static>>,
     message: PhantomData<T>,
 }
 
-impl<T> Service<T>
+impl<ST> Service<ST>
 where
-    T: MessageDefinition<T>,
+    ST: ServiceType,
 {
     /// Creates and initializes a non-action-based service.
     /// 
@@ -106,11 +105,12 @@ where
         callback: F,
     ) -> Result<Self, RclReturnCode>
     where
-        T: MessageDefinition<T>,
-        F: FnMut(&T) + Sized + 'static,
+        // T: MessageDefinition<T>,
+        ST: ServiceType,
+        F: FnMut(&ST::Request) -> ST::Response + Sized + 'static,
     {
         let mut service_handle = unsafe { rcl_get_zero_initialized_service() };
-        let type_support = T::get_type_support() as *const rosidl_service_type_support_t;
+        let type_support = ST::get_type_support() as *const rosidl_service_type_support_t;
         let topic_c_string = CString::new(topic).unwrap();  // If the topic name is unrepresentable as a c-string, RCL will be unable to use it
         let node_handle = &mut *node.handle.lock();
 
@@ -140,61 +140,73 @@ where
         })
     }
 
-    pub fn take_request_with_info(&self,  request_header: &mut rmw_service_info_t, request: &mut T) -> Result<(), RclReturnCode> {
-        let handle = &mut *self.handle.lock();
+    pub fn take_request(&self, request: &mut ST::Request) -> Result<rmw_request_id_t, RclReturnCode> {
+        let handle = & *self.handle.lock();
         let request_handle = request.get_native_message();
+        let request_header_ref = core::ptr::null_mut();
         let ret = unsafe {
-            rcl_take_request_with_info(
+             rcl_take_request(
                 handle as *const _,
-                request_header as *mut _,
-                request_handle as *mut _)
-        };
-        request.read_handle(request_handle);
-        request.destroy_native_message(request_handle);
-        ret.ok()
-    }
-
-    pub fn take_request(&self, request: &mut T) -> Result<(), RclReturnCode> {
-        let handle = &mut *self.handle.lock();
-        let request_handle = request.get_native_message();
-        let ret = unsafe {
-            rcl_take_request(
-                handle as *const _,
-                core::ptr::null_mut(),
+                request_header_ref,
                 request_handle as *mut _,
             )
         };
         request.read_handle(request_handle);
         request.destroy_native_message(request_handle);
-        ret.ok()
+
+        ret
+        .ok()
+        .map(|_| {
+            unsafe{
+                // If `rcl_take_request` was successful, request_header_ref cannot be null
+                core::ptr::read(request_header_ref)
+            }
+        })
     }
 
-    fn callback_ext(
+    pub fn send_response(&self, request_header: &mut rmw_request_id_t, response: &mut ST::Response) -> Result<(), RclReturnCode> {
+        let handle = & *self.handle.lock();
+        let response_handle = response.get_native_message();
+        unsafe {
+            rcl_send_response(
+                handle as *const _,
+                request_header as *mut _,
+                response_handle as *mut _,
+            ).ok()
+        }
+    }
+
+    // pub fn handle_request(&self, request_header: &mut rmw_request_id_t, request: &mut T) -> Result<(), RclReturnCode> {
+
+    // }
+
+    pub fn callback_ext(
         &self,
         message: Box<dyn Message>,
-    ) -> Result<(), RclReturnCode> {
+    ) -> Result<Box<dyn Message>, RclReturnCode> {
         let msg = message
             .downcast_ref()
             .ok_or(RclReturnCode::Error)?;
-        (&mut *self.callback.lock())(msg);
-        Ok(())
+        let response = (&mut *self.callback.lock())(msg);
+        Ok(Box::new(response))
     }
 
 }
 
-impl<T> ServiceBase for Service<T>
+impl<ST> ServiceBase for Service<ST>
 where
-    T: MessageDefinition<T> + core::default::Default,
+    ST: ServiceType + core::default::Default,
 {
     fn handle(&self) -> &ServiceHandle {
         self.handle.borrow()
     }
 
-    fn create_message(&self) -> Box<dyn Message> {
-        Box::new(T::default())
-    }
+    // fn create_message(&self) -> Box<dyn Message> {
+    //     Box::new(ST::default())
+    // }
 
-    fn callback_fn(&self, message: Box<dyn Message>) -> Result<(), RclReturnCode> {
+    fn callback_fn(&self, message: Box<dyn Message>) -> Result<Box<dyn Message>, RclReturnCode>
+    {
         self.callback_ext(message)
     }
 }

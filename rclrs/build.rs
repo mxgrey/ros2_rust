@@ -17,7 +17,7 @@ fn main() {
         .allowlist_function("rmw_.*")
         .allowlist_function("rcutils_.*")
         .allowlist_var("rcl_.*")
-        .allowlist_var("rcl_.*")
+        .allowlist_var("rmw_.*")
         .allowlist_var("rcutils_.*")
         .size_t_is_usize(true)
         .default_enum_style(bindgen::EnumVariation::Rust {

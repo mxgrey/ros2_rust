@@ -59,7 +59,7 @@ from rosidl_cmake import convert_camel_case_to_lower_case_underscore
 from rosidl_parser.definition import AbstractGenericString, Array, BasicType
 from rosidl_generator_rs import  get_rs_name, get_rs_type
 }@
-#[link(name = "@(package_name)__rosidl_typesupport_c_rsext")]
+#[link(name = "@(package_name)__rosidl_typesupport_c__rsext")]
 extern "C" {
     fn @(c_function_prefix)_get_type_support() -> uintptr_t;
     
@@ -79,8 +79,10 @@ extern "C" {
 @[        if isinstance(member.type, Array)]@
 @[        elif isinstance(member.type, AbstractGenericString)]@
     fn @(c_function_prefix)_@(member.name)_read_handle(message_handle: uintptr_t) -> *const c_char;
+
 @[        elif isinstance(member.type, BasicType)]@
     fn @(c_function_prefix)_@(member.name)_read_handle(message_handle: uintptr_t) -> @(get_rs_type(member.type));
+
 @[        end if]@
 @[    end for]@
 }
@@ -123,7 +125,7 @@ impl @(struct_name) {
                 let ptr = @(c_function_prefix)_read_handle(_message_handle);
                 self.@(get_rs_name(member.name)) = CStr::from_ptr(ptr).to_string_lossy().into_owned();
 @[        elif isinstance(member.type, BasicType)]@
-                self.@(get_rs_name(member.name)) = @(c_function_prefix)_read_handle(_message_handle);
+                self.@(get_rs_name(member.name)) = @(c_function_prefix)_@(member.name)_read_handle(_message_handle);
 @[        elif isinstance(member.type, AbstractSequence)]@
 @[        end if]@
 @[    end for]@
@@ -157,7 +159,7 @@ impl rclrs_msg_utilities::traits::MessageDefinition<@(struct_name)> for @(struct
         unsafe { @(c_function_prefix)_get_type_support() }
     }
 
-    fn static_get_native_message(message: &@(struct_name) -> uintptr_t {
+    fn static_get_native_message(message: &@(struct_name)) -> uintptr_t {
         message.get_native_message()
     }
 
@@ -188,5 +190,22 @@ impl rclrs_msg_utilities::traits::MessageDefinition<@(struct_name)> for @(struct
 @(gen_message_trait_impl(response_struct_name))@
 
 @(gen_message_definition_trait_impl(response_struct_name, response_c_function_prefix))@
+
+#[link(name = "@(package_name)__rosidl_typesupport_c__rsext")]
+extern "C" {
+    fn @(base_c_function_prefix)_get_type_support() -> uintptr_t;
+}
+
+#[derive(Default)]
+pub struct @(type_name);
+
+impl rclrs_msg_utilities::traits::ServiceType for @(type_name){
+    type Request = @(request_struct_name);
+    type Response = @(response_struct_name);
+
+    fn get_type_support() -> uintptr_t {
+        unsafe { @(base_c_function_prefix)_get_type_support() }
+    }
+}
 
 @[end for]

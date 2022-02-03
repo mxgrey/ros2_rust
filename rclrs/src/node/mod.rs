@@ -6,7 +6,7 @@ use alloc::{
 use crate::error::{RclReturnCode, ToResult};
 use crate::qos::QoSProfile;
 use crate::rcl_bindings::*;
-use rclrs_msg_utilities::traits::MessageDefinition;
+use rclrs_msg_utilities::traits::{MessageDefinition, ServiceType};
 
 use crate::{Context, ContextHandle};
 use cstr_core::CString;
@@ -17,6 +17,8 @@ pub mod subscription;
 pub use self::subscription::*;
 pub mod service;
 pub use self::service::*;
+pub mod client;
+pub use self::client::*;
 
 #[cfg(not(feature = "std"))]
 use spin::{Mutex, MutexGuard};
@@ -52,6 +54,7 @@ pub struct Node {
     pub(crate) context: Arc<ContextHandle>,
     pub(crate) subscriptions: Vec<Weak<dyn SubscriptionBase>>,
     pub(crate) services: Vec<Weak<dyn ServiceBase>>,
+    pub(crate) clients: Vec<Weak<dyn ClientBase>>,
 }
 
 impl Node {
@@ -90,6 +93,7 @@ impl Node {
             context: context.handle.clone(),
             subscriptions: alloc::vec![],
             services: alloc::vec![],
+            clients: alloc::vec![],
         })
     }
 
@@ -122,18 +126,31 @@ impl Node {
         Ok(subscription)
     }
 
-    pub fn create_service<T, F>(
+    pub fn create_service<ST, F>(
         &mut self,
         topic: &str,
         qos: QoSProfile,
         callback: F,
-    ) -> Result<Arc<Service<T>>, RclReturnCode>
+    ) -> Result<Arc<Service<ST>>, RclReturnCode>
     where
-        T: MessageDefinition<T> + Default,
-        F: FnMut(&T) + Sized + 'static,
+        ST: ServiceType + Default,
+        F: FnMut(&ST::Request) -> ST::Response + Sized + 'static,
     {
-        let service = Arc::new(Service::<T>::new(self, topic, qos, callback)?);
+        let service = Arc::new(Service::<ST>::new(self, topic, qos, callback)?);
         self.services.push(Arc::downgrade(&service) as Weak<dyn ServiceBase>);
         Ok(service)
+    }
+
+    pub fn create_client<T>(
+        &mut self,
+        topic: &str,
+        qos: QoSProfile
+    ) -> Result<Arc<Client<T>>, RclReturnCode>
+    where
+        T: MessageDefinition<T> + Default,
+    {
+        let client = Arc::new(Client::<T>::new(self, topic, qos)?);
+        self.clients.push(Arc::downgrade(&client) as Weak<dyn ClientBase>);
+        Ok(client)
     }
 }

@@ -27,6 +27,7 @@
 pub mod traits {
     extern crate downcast_rs;
     extern crate libc;
+    extern crate alloc;
 
     use downcast_rs::{Downcast, impl_downcast};
 
@@ -44,6 +45,13 @@ pub mod traits {
         fn get_type_support() -> uintptr_t;
         fn static_get_native_message(message: &T) -> uintptr_t;
         fn static_destroy_native_message(message_handle: uintptr_t);
+    }
+
+    pub trait ServiceType: Downcast {
+        type Request: Message;
+        type Response: Message;
+
+        fn get_type_support() -> uintptr_t;
     }
 
 }
