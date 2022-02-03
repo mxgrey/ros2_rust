@@ -57,7 +57,7 @@ pub(crate) struct WaitSet {
 impl WaitSet {
     /// Creates and initializes a new WaitSet object.
     ///
-    /// Under the hood, this calls `rcl_get_zero_initialized_wait_set()`, and stores it
+    /// Under the hood, this calls [`rcl_get_zero_initialized_wait_set()`], and stores it
     /// within the WaitSet struct, while also noting that the returned value is uninitialized.
     pub fn new(
         number_of_subscriptions: usize,

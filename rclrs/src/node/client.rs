@@ -232,6 +232,18 @@ where
         ret.ok()
     }
 
+    /// Send a request to the service server, and schedule a callback in the executor.
+    /// 
+    /// If the callback is never called (because we never got a reply for the service server),
+    /// [`remove_pending_request`] has to be called with the returned request ID, or [`prune_pending_requests()`].
+    /// Not doing so will make the [`Client`] instance use more memory each time a response is not
+    /// recieved from the service server.
+    /// In this case, it's convenient to setup a timer to clean up the pending requests.
+    /// 
+    /// # Parameters
+    /// * `request` - The request to be sent
+    /// * `callback` - The callback that will be called when we get a response for this request.
+    /// * returns - The request ID representing the request just sent
     pub fn send_request(&mut self, request: ST::Request, callback: Box<dyn FnOnce(ST::Response) + Send + Sync>) -> Result<i64, RclReturnCode> {
         let handle = & *self.handle.lock();
         let request_handle = request.get_native_message();
