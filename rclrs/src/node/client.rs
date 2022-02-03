@@ -33,7 +33,6 @@ use spin::{Mutex, MutexGuard};
 use parking_lot::{Mutex, MutexGuard};
 
 mod PendingRequestCollection {
-    use core::fmt::Result;
     #[cfg(feature = "std")]
     use std::time::SystemTime;
 
