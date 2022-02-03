@@ -6,8 +6,9 @@ find_package(rclrs_crate_config_generator REQUIRED)
 find_package(rclrs REQUIRED)
 find_package(rclrs_msg_utilities REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(rclrs_example_srvs REQUIRED)
 
-set(ROS_CRATES std_msgs rclrs rclrs_msg_utilities)
+set(ROS_CRATES rclrs_example_srvs std_msgs rclrs rclrs_msg_utilities)
 rclrs_gen_crate_config("${ROS_CRATES}")
 
 # Build examples

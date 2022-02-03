@@ -19,7 +19,6 @@ use crate::error::{RclReturnCode, ToResult};
 use crate::qos::QoSProfile;
 use crate::rcl_bindings::*;
 use crate::{Node, NodeHandle};
-use alloc::boxed::Box;
 use alloc::sync::Arc;
 use cstr_core::CString;
 use rclrs_msg_utilities::traits::{Message, ServiceType};
@@ -31,6 +30,69 @@ use spin::{Mutex, MutexGuard};
 
 #[cfg(feature = "std")]
 use parking_lot::{Mutex, MutexGuard};
+
+mod PendingRequestCollection {
+    use std::time::SystemTime;
+
+    use alloc::boxed::Box;
+    use hashbrown::HashMap;
+    use rclrs_msg_utilities::traits::ServiceType;
+    
+    pub(crate) struct PendingRequests<ST>
+    where
+        ST: ServiceType
+    {
+        requests_collection: HashMap<i64, (SystemTime, Box<dyn FnOnce(ST::Response)>)>,
+    }
+
+    impl<ST> PendingRequests<ST>
+    where
+        ST: ServiceType
+    {
+        pub fn new() -> Self {
+            Self {
+                requests_collection: HashMap::new(),
+            }
+        }
+        /// Clean up a pending request.
+        /// 
+        /// This notifies the client that we have waited long enough for a response from the server
+        /// to come; we have given up, and are not waiting for a response anymore.
+        /// 
+        /// Not calling this will make the client start using more memory for each request
+        /// that never got a reply from the server.
+        /// 
+        /// # Parameters
+        /// * `request_id` - The request ID returned by [`async_send_request()`]
+        /// * returns - `true` when a pending request was removed, `false` if not (e.g. a response was recieved)
+        pub(crate) fn remove_pending_request(&mut self, request_id: &i64) -> bool {
+            self.requests_collection.remove(request_id).is_some()
+        }
+
+        /// Clean all pending requests.
+        /// 
+        /// # Parameters
+        /// * returns - The number of pending requests that were removed.
+        pub(crate) fn prune_pending_requests(&mut self) -> usize {
+            let old_size = self.requests_collection.len();
+            self.requests_collection.clear();
+            old_size
+        }
+
+        /// Clean all pending requests older than a [`time_point`].
+        /// 
+        /// # Parameters
+        /// * `time_point` - Requests that were sent before this point are going to be removed.
+        /// returns - The number of pending requests that were removed.
+        pub(crate) fn prune_requests_older_than(&mut self, time_point: &SystemTime) -> usize {
+            let old_size = self.requests_collection.len();
+            self.requests_collection.retain(| _, (tp, _) | *tp > *time_point);
+            old_size - self.requests_collection.len()
+        }
+
+    }
+    
+}
 
 pub(crate) struct ClientHandle {
     handle: Mutex<rcl_client_t>,
@@ -75,6 +137,7 @@ where
 {
     pub(crate) handle: Arc<ClientHandle>,
     message: PhantomData<T>,
+    pub(crate) pending_requests: PendingRequestCollection::PendingRequests<T>,
 }
 
 impl<ST> Client<ST>
@@ -122,6 +185,7 @@ where
         Ok(Self {
             handle,
             message: PhantomData,
+            pending_requests: PendingRequestCollection::PendingRequests::new(),
         })
     }
 

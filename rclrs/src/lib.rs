@@ -3,6 +3,7 @@ extern crate alloc;
 extern crate core_error;
 extern crate downcast;
 extern crate rclrs_msg_utilities;
+extern crate hashbrown;
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -18,6 +19,7 @@ pub mod error;
 pub mod node;
 pub mod qos;
 pub mod wait;
+// pub mod executor;
 
 mod rcl_bindings;
 

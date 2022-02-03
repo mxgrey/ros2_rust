@@ -12,6 +12,14 @@ path = "src/rclrs_subscriber.rs"
 name = "rclrs_publisher"
 path = "src/rclrs_publisher.rs"
 
+[[bin]]
+name = "rclrs_service"
+path = "src/rclrs_service.rs"
+
+[[bin]]
+name = "rclrs_client"
+path = "src/rclrs_client.rs"
+
 [dependencies]
 thiserror = "1"
 anyhow = {version = "1", features = ["backtrace"]}
@@ -24,4 +32,7 @@ version = "*"
 version = "*"
 
 [dependencies.std_msgs]
+version = "*"
+
+[dependencies.rclrs_example_srvs]
 version = "*"

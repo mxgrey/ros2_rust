@@ -103,7 +103,6 @@ where
         callback: F,
     ) -> Result<Self, RclReturnCode>
     where
-        // T: MessageDefinition<T>,
         ST: ServiceType,
         F: FnMut(&ST::Request) -> ST::Response + Sized + 'static,
     {
