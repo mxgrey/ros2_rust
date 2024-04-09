@@ -54,7 +54,7 @@ pub trait ServiceBase: Send + Sync {
 }
 
 type ServiceCallback<Request, Response> =
-    Box<dyn FnMut(&rmw_request_id_t, Request) -> Response + 'static + Send>;
+    Box<dyn Fn(Req<Request>) -> Response + 'static + Send>;
 
 /// Main class responsible for responding to requests sent by ROS clients.
 ///
@@ -74,6 +74,15 @@ where
     pub callback: Mutex<ServiceCallback<T::Request, T::Response>>,
 }
 
+/// This bundles all the data that gets provided to service callbacks.
+#[non_exhaustive]
+pub struct Req<'a, T> {
+    /// The data of the request message
+    pub request: T,
+    /// A borrow of the header for the request.
+    pub header: &'a rmw_request_id_t,
+}
+
 impl<T> Service<T>
 where
     T: rosidl_runtime_rs::Service,
@@ -88,7 +97,7 @@ where
     // [`Node::create_service`], see the struct's documentation for the rationale
     where
         T: rosidl_runtime_rs::Service,
-        F: FnMut(&rmw_request_id_t, T::Request) -> T::Response + 'static + Send,
+        F: Fn(Req<T::Request>) -> T::Response + 'static + Send,
     {
         // SAFETY: Getting a zero-initialized value is always safe.
         let mut rcl_service = unsafe { rcl_get_zero_initialized_service() };
@@ -189,7 +198,7 @@ where
     }
 
     fn execute(&self) -> Result<(), RclrsError> {
-        let (req, mut req_id) = match self.take_request() {
+        let (request, mut req_id) = match self.take_request() {
             Ok((req, req_id)) => (req, req_id),
             Err(RclrsError::RclError {
                 code: RclReturnCode::ServiceTakeFailed,
@@ -201,7 +210,7 @@ where
             }
             Err(e) => return Err(e),
         };
-        let res = (*self.callback.lock().unwrap())(&req_id, req);
+        let res = (*self.callback.lock().unwrap())(Req{ request, header: &req_id });
         let rmw_message = <T::Response as Message>::into_rmw_message(res.into_cow());
         let handle = &*self.handle.lock();
         unsafe {
@@ -244,11 +253,15 @@ mod tests {
         let _node_1_empty_service =
             graph
                 .node1
-                .create_service::<srv::Empty, _>("graph_test_topic_4", |_, _| {
-                    srv::Empty_Response {
-                        structure_needs_at_least_one_member: 0,
+                .create_service::<srv::Empty>(
+                    "graph_test_topic_4",
+                    |Req { request, .. }| {
+                        let r = request.structure_needs_at_least_one_member;
+                        srv::Empty_Response {
+                            structure_needs_at_least_one_member: r,
+                        }
                     }
-                })?;
+                )?;
         let _node_2_empty_client = graph
             .node2
             .create_client::<srv::Empty>("graph_test_topic_4")?;

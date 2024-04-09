@@ -2,8 +2,10 @@ use std::env;
 
 use anyhow::{Error, Result};
 
+use rclrs::Req;
+
 fn handle_service(
-    request: example_interfaces::srv::AddTwoInts_Request,
+    Req{ request, .. }: Req<example_interfaces::srv::AddTwoInts_Request>,
 ) -> example_interfaces::srv::AddTwoInts_Response {
     println!("request: {} + {}", request.a, request.b);
     example_interfaces::srv::AddTwoInts_Response {
