@@ -1,6 +1,4 @@
-use std::env;
-use std::sync::Arc;
-use std::thread;
+use std::{env, sync::Arc, thread};
 
 use anyhow::{Error, Result};
 
