@@ -26,6 +26,10 @@ futures = "0.3"
 # Needed for dynamic messages
 libloading = { version = "0.8", optional = true }
 
+# Needed for serialization and deserialization of vendored message types
+serde = { version = "1", optional = true, features = ["derive"] }
+serde-big-array = { version = "0.5.1", optional = true }
+
 # Needed for the Message trait, among others
 rosidl_runtime_rs = "0.4"
 
@@ -49,6 +53,7 @@ dyn_msg = ["ament_rs", "libloading"]
 # This feature is solely for the purpose of being able to generate documetation without a ROS installation
 # The only intended usage of this feature is for docs.rs builders to work, and is not intended to be used by end users
 generate_docs = ["rosidl_runtime_rs/generate_docs"]
+serde = ["dep:serde", "dep:serde-big-array", "rosidl_runtime_rs/serde"]
 
 [package.metadata.docs.rs]
 features = ["generate_docs"]

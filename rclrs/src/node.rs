@@ -237,7 +237,7 @@ impl Node {
     /// [1]: crate::ActionServer
     // TODO: make action server's lifetime depend on node's lifetime
     pub fn create_action_server<ActionT, GoalCallback, CancelCallback, AcceptedCallback>(
-        &mut self,
+        &self,
         topic: &str,
         handle_goal: GoalCallback,
         handle_cancel: CancelCallback,

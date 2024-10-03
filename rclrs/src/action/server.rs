@@ -49,7 +49,7 @@ impl Drop for ActionServerHandle {
 /// Trait to be implemented by concrete ActionServer structs.
 ///
 /// See [`ActionServer<T>`] for an example
-pub trait ActionServerBase: Send + Sync {
+pub(crate) trait ActionServerBase: Send + Sync {
     /// Internal function to get a reference to the `rcl` handle.
     fn handle(&self) -> &ActionServerHandle;
     /// Returns the number of underlying entities for the action server.
