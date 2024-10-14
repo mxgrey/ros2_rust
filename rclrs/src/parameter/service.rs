@@ -798,6 +798,8 @@ mod tests {
         let request = SetParameters_Request {
             parameters: seq![undeclared_bool],
         };
+
+        let test_node = Arc::clone(&test.node);
         let promise = set_client
             .call_then(
                 request,
@@ -806,7 +808,7 @@ mod tests {
                     // Setting the undeclared parameter is now allowed
                     assert!(response.results[0].successful);
                     assert_eq!(
-                        test.node.use_undeclared_parameters().get("undeclared_bool"),
+                        test_node.use_undeclared_parameters().get("undeclared_bool"),
                         Some(ParameterValue::Bool(true))
                     );
                     callback_ran_inner.store(true, Ordering::Release);
