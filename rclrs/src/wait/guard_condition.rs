@@ -5,8 +5,8 @@ use std::{
 
 use crate::{
     rcl_bindings::*,
-    ContextHandle, RclrsError, ToResult, WaitableLifecycle, Executable,
-    Waitable, ExecutableKind, ExecutableHandle,
+    ContextHandle, RclrsError, ToResult, WaitableLifecycle, RclExecutable,
+    Waitable, RclExecutableKind, RclExecutableHandle,
 };
 
 /// A waitable entity used for waking up a wait set manually.
@@ -191,20 +191,22 @@ struct GuardConditionExecutable {
     callback: Option<Box<dyn FnMut() + Send + Sync>>,
 }
 
-impl Executable for GuardConditionExecutable {
+impl RclExecutable for GuardConditionExecutable {
     fn execute(&mut self) -> Result<(), RclrsError> {
+        println!("---------------------- executing guard condition -----------------");
         if let Some(callback) = &mut self.callback {
+            println!(" >>>>>>>>>>>>>>>>>>> triggering guard condition callback");
             callback();
         }
         Ok(())
     }
 
-    fn kind(&self) -> ExecutableKind {
-        ExecutableKind::GuardCondition
+    fn kind(&self) -> RclExecutableKind {
+        RclExecutableKind::GuardCondition
     }
 
-    fn handle(&self) -> ExecutableHandle {
-        ExecutableHandle::GuardCondition(
+    fn handle(&self) -> RclExecutableHandle {
+        RclExecutableHandle::GuardCondition(
             self.handle.rcl_guard_condition.lock().unwrap()
         )
     }

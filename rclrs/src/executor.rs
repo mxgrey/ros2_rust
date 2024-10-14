@@ -8,6 +8,7 @@ use std::io::Write;
 
 use crate::{
     Node, NodeOptions, RclrsError, Context, ContextHandle, Waitable, GuardCondition,
+    Executable, WaitSetStream,
 };
 use std::{
     sync::{Arc, atomic::{AtomicBool, Ordering}},
@@ -76,15 +77,18 @@ impl Executor {
     where
         E: 'static + ExecutorRuntime + Send,
     {
-        let (wakeup_wait_set, waitable) = GuardCondition::new(&context, None);
+        let (wakeup_wait_set, wakeup_waitable) = GuardCondition::new(&context, None);
+        let (wait_set_stream, stream_waitable) = WaitSetStream::new(&context);
         let commands = Arc::new(ExecutorCommands {
             context: Context { handle: Arc::clone(&context) },
             channel: runtime.channel(),
             halt_spinning: Arc::new(AtomicBool::new(false)),
             wakeup_wait_set: Arc::new(wakeup_wait_set),
+            wait_set_stream,
         });
 
-        commands.add_to_wait_set(waitable);
+        commands.add_waitable_to_wait_set(wakeup_waitable);
+        commands.add_waitable_to_wait_set(stream_waitable);
 
         Self {
             context,
@@ -111,6 +115,7 @@ pub struct ExecutorCommands {
     channel: Box<dyn ExecutorChannel>,
     halt_spinning: Arc<AtomicBool>,
     wakeup_wait_set: Arc<GuardCondition>,
+    wait_set_stream: WaitSetStream,
 }
 
 impl ExecutorCommands {
@@ -205,8 +210,16 @@ impl ExecutorCommands {
         &self.context
     }
 
-    pub(crate) fn add_to_wait_set(&self, waitable: Waitable) {
-        self.channel.add_to_waitset(waitable);
+    /// This is to add an rcl primitive to the wait set.
+    pub(crate) fn add_waitable_to_wait_set(&self, waitable: Waitable) {
+        self.channel.add_waitable_to_wait_set(waitable);
+    }
+
+    /// This is for single-shot executables that need to be run on the same
+    /// thread as the wait set to protect against race conditions at the rcl
+    /// layer.
+    pub(crate) fn stream_executable_to_wait_set(&self, executable: Arc<dyn Executable>) {
+        self.wait_set_stream.send(executable);
     }
 
     /// Get a guard condition that can be used to wake up the wait set of the executor.
@@ -222,7 +235,7 @@ pub trait ExecutorChannel: Send + Sync {
     fn add_async_task(&self, f: BoxFuture<'static, ()>);
 
     /// Add new entities to the waitset of the executor.
-    fn add_to_waitset(&self, new_entity: Waitable);
+    fn add_waitable_to_wait_set(&self, new_entity: Waitable);
 }
 
 /// This trait defines the interface for having an executor run.

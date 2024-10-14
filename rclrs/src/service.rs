@@ -1,14 +1,18 @@
+use rosidl_runtime_rs::Message;
+
 use std::{
     boxed::Box,
     ffi::{CStr, CString},
     sync::{Arc, Mutex, MutexGuard},
+    collections::VecDeque,
 };
 
 use crate::{
     error::ToResult,
     rcl_bindings::*,
-    NodeHandle, RclrsError, Waitable, WaitableLifecycle, QoSProfile,
-    Executable, ExecutableKind, ExecutableHandle, ENTITY_LIFECYCLE_MUTEX, ExecutorCommands,
+    NodeHandle, RclrsError, Waitable, WaitableLifecycle, QoSProfile, Executable,
+    RclExecutable, RclExecutableKind, RclExecutableHandle, ENTITY_LIFECYCLE_MUTEX,
+    ExecutorCommands, MessageCow,
 };
 
 mod any_service_callback;
@@ -139,47 +143,45 @@ where
             rcl_service: Mutex::new(rcl_service),
             node_handle: Arc::clone(&node_handle),
         });
-
+        let sender = Arc::new(ServiceResponseSender::new(&handle, commands));
         let (waitable, lifecycle) = Waitable::new(
             Box::new(ServiceExecutable {
-                handle: Arc::clone(&handle),
+                sender,
                 callback: Arc::clone(&callback),
-                commands: Arc::clone(&commands),
             }),
             Some(Arc::clone(commands.get_guard_condition())),
         );
 
         let service = Arc::new(Self { handle, callback, lifecycle });
-        commands.add_to_wait_set(waitable);
+        commands.add_waitable_to_wait_set(waitable);
 
         Ok(service)
     }
 }
 
 struct ServiceExecutable<T: rosidl_runtime_rs::Service> {
-    handle: Arc<ServiceHandle>,
+    sender: Arc<ServiceResponseSender<T>>,
     callback: Arc<Mutex<AnyServiceCallback<T>>>,
-    commands: Arc<ExecutorCommands>,
 }
 
-impl<T> Executable for ServiceExecutable<T>
+impl<T> RclExecutable for ServiceExecutable<T>
 where
     T: rosidl_runtime_rs::Service,
 {
     fn execute(&mut self) -> Result<(), RclrsError> {
-        if let Err(err) = self.callback.lock().unwrap().execute(&self.handle, &self.commands) {
+        if let Err(err) = self.callback.lock().unwrap().execute(Arc::clone(&self.sender)) {
             // TODO(@mxgrey): Log the error here once logging is implemented
             eprintln!("Error while executing a service callback: {err}");
         }
         Ok(())
     }
 
-    fn kind(&self) -> crate::ExecutableKind {
-        ExecutableKind::Service
+    fn kind(&self) -> crate::RclExecutableKind {
+        RclExecutableKind::Service
     }
 
-    fn handle(&self) -> ExecutableHandle {
-        ExecutableHandle::Service(self.handle.lock())
+    fn handle(&self) -> RclExecutableHandle {
+        RclExecutableHandle::Service(self.sender.handle.lock())
     }
 }
 
@@ -213,6 +215,68 @@ impl Drop for ServiceHandle {
         unsafe {
             rcl_service_fini(rcl_service, &mut *rcl_node);
         }
+    }
+}
+
+struct ServiceResponseSender<T>
+where
+    T: rosidl_runtime_rs::Service,
+{
+    handle: Arc<ServiceHandle>,
+    responses: Mutex<VecDeque<(T::Response, rmw_request_id_t)>>,
+    commands: Arc<ExecutorCommands>,
+}
+
+impl<T> Executable for ServiceResponseSender<T>
+where
+    T: rosidl_runtime_rs::Service,
+{
+    fn execute(&self) {
+        println!(" ---------------- streaming responses ----------------- ");
+        for (response, mut request_id) in self.responses.lock().unwrap().drain(..) {
+            println!(" > {response:?}");
+            let rmw_message = <T::Response as Message>::into_rmw_message(response.into_cow());
+            let handle = &*self.handle.lock();
+            if let Err(err) = unsafe {
+                rcl_send_response(
+                    handle,
+                    &mut request_id,
+                    rmw_message.as_ref() as *const <T::Response as Message>::RmwMsg as *mut _,
+                )
+            }
+            .ok() {
+                // TODO(@mxgrey): Log this error when logging is available.
+                eprintln!("Error while trying to send response: {err}");
+            }
+        }
+    }
+}
+
+impl<T> ServiceResponseSender<T>
+where
+    T: rosidl_runtime_rs::Service,
+{
+    fn new(
+        handle: &Arc<ServiceHandle>,
+        commands: &Arc<ExecutorCommands>,
+    ) -> Self {
+        Self {
+            handle: Arc::clone(handle),
+            commands: Arc::clone(commands),
+            responses: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    fn send(
+        self: Arc<Self>,
+        request_id: rmw_request_id_t,
+        response: T::Response,
+    ) {
+        dbg!();
+        println!(" ------------------- sending response to stream -------------------- ");
+        self.responses.lock().unwrap().push_back((response, request_id));
+        let commands = Arc::clone(&self.commands);
+        commands.stream_executable_to_wait_set(self as Arc<dyn Executable>);
     }
 }
 

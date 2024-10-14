@@ -337,7 +337,7 @@ impl NodeOptions {
                 })),
             )
         };
-        commands.add_to_wait_set(graph_change_waitable);
+        commands.add_waitable_to_wait_set(graph_change_waitable);
         let _ = commands.run(node_graph_task(
             graph_change_receiver,
             graph_change_guard_condition,

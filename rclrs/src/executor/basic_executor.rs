@@ -147,7 +147,7 @@ impl ExecutorRuntime for BasicExecutorRuntime {
             This is a critical bug in rclrs. \
             Please report this bug to the maintainers of rclrs by providing a minimum reproduction of the problem."
         )
-        .sender();
+        .waitable_sender();
 
         Box::new(BasicExecutorChannel {
             task_sender: self.task_sender.clone(),
@@ -212,7 +212,7 @@ impl ExecutorChannel for BasicExecutorChannel {
         self.task_sender.add_async_task(f);
     }
 
-    fn add_to_waitset(&self, new_entity: Waitable) {
+    fn add_waitable_to_wait_set(&self, new_entity: Waitable) {
         // TODO(@mxgrey): Log errors here once logging becomes available.
         self.waitable_sender.unbounded_send(new_entity).ok();
     }

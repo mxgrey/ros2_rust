@@ -36,7 +36,7 @@ impl WaitSetRunner {
 
     /// Get the sender that allows users to send new [`Waitables`] to this
     /// `WaitSetRunner`.
-    pub fn sender(&self) -> UnboundedSender<Waitable> {
+    pub fn waitable_sender(&self) -> UnboundedSender<Waitable> {
         self.waitable_sender.clone()
     }
 

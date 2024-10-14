@@ -1,7 +1,7 @@
 use std::{
     ffi::CString,
     sync::{Arc, Mutex, MutexGuard},
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
 };
 
 use rosidl_runtime_rs::Message;
@@ -10,8 +10,8 @@ use crate::{
     error::ToResult,
     rcl_bindings::*,
     MessageCow, Node, RclrsError, RclReturnCode, Promise, ENTITY_LIFECYCLE_MUTEX,
-    Executable, QoSProfile, Waitable, WaitableLifecycle,
-    ExecutableHandle, ExecutableKind, ServiceInfo,
+    RclExecutable, QoSProfile, Waitable, WaitableLifecycle, Executable,
+    RclExecutableHandle, RclExecutableKind, ServiceInfo,
 };
 
 mod client_async_callback;
@@ -34,8 +34,7 @@ pub struct Client<T>
 where
     T: rosidl_runtime_rs::Service,
 {
-    handle: Arc<ClientHandle>,
-    board: Arc<Mutex<ClientRequestBoard<T>>>,
+    sender: Arc<ClientRequestSender<T>>,
     #[allow(unused)]
     lifecycle: WaitableLifecycle,
 }
@@ -59,33 +58,20 @@ where
     ///
     /// [1]: crate::RequestId
     /// [2]: crate::ServiceInfo
-    pub fn call<'a, Req, Out>(
+    //
+    // TODO(@mxgrey): Think of ways to support MessageCow here. Currently we
+    // cannot support it because rcl_send_request cannot be run while the client
+    // is in the wait set.
+    pub fn call<'a, Out>(
         &self,
-        request: Req,
-    ) -> Result<Promise<Out>, RclrsError>
+        request: T::Request,
+    ) -> Promise<Out>
     where
-        Req: MessageCow<'a, T::Request>,
         Out: ClientOutput<T::Response>,
     {
         let (sender, promise) = Out::create_channel();
-        let rmw_message = T::Request::into_rmw_message(request.into_cow());
-        let mut sequence_number = -1;
-        unsafe {
-            // SAFETY: The client handle ensures the rcl_client is valid and
-            // our generic system ensures it has the correct type.
-            rcl_send_request(
-                &*self.handle.lock() as *const _,
-                rmw_message.as_ref() as *const <T::Request as Message>::RmwMsg as *mut _,
-                &mut sequence_number,
-            )
-        }
-        .ok()?;
-
-        println!("vvvvvvvvv Sent client request {sequence_number} vvvvvvvvvvvv");
-        // TODO(@mxgrey): Log errors here when logging becomes available.
-        self.board.lock().unwrap().new_request(sequence_number, sender);
-
-        Ok(promise)
+        self.sender.send(request, sender);
+        promise
     }
 
     /// Call this service and then handle its response with a regular callback.
@@ -96,14 +82,11 @@ where
     /// safely discard it.
     //
     // TODO(@mxgrey): Add documentation to show what callback signatures are supported
-    pub fn call_then<'a, Req, Args>(
+    pub fn call_then<'a, Args>(
         &self,
-        request: Req,
+        request: T::Request,
         callback: impl ClientCallback<T, Args>,
-    ) -> Result<Promise<()>, RclrsError>
-    where
-        Req: MessageCow<'a, T::Request>,
-    {
+    ) -> Promise<()> {
         let callback = move |response, info| {
             async { callback.run_client_callback(response, info); }
         };
@@ -118,16 +101,13 @@ where
     /// safely discard it.
     //
     // TODO(@mxgrey): Add documentation to show what callback signatures are supported
-    pub fn call_then_async<'a, Req, Args>(
+    pub fn call_then_async<'a, Args>(
         &self,
-        request: Req,
+        request: T::Request,
         callback: impl ClientAsyncCallback<T, Args>,
-    ) -> Result<Promise<()>, RclrsError>
-    where
-        Req: MessageCow<'a, T::Request>,
-    {
-        let response: Promise<(T::Response, ServiceInfo)> = self.call(request)?;
-        let promise = self.handle.node.commands().run(async move {
+    ) -> Promise<()> {
+        let response: Promise<(T::Response, ServiceInfo)> = self.call(request);
+        let promise = self.sender.handle.node.commands().run(async move {
             match response.await {
                 Ok((response, info)) => {
                     callback.run_client_async_callback(response, info).await;
@@ -138,7 +118,7 @@ where
             }
         });
 
-        Ok(promise)
+        promise
     }
 
     /// Check if a service server is available.
@@ -149,8 +129,8 @@ where
     /// until a service for this client is ready.
     pub fn service_is_ready(&self) -> Result<bool, RclrsError> {
         let mut is_ready = false;
-        let client = &mut *self.handle.rcl_client.lock().unwrap();
-        let node = &mut *self.handle.node.handle().rcl_node.lock().unwrap();
+        let client = &mut *self.sender.handle.rcl_client.lock().unwrap();
+        let node = &mut *self.sender.handle.node.handle().rcl_node.lock().unwrap();
 
         unsafe {
             // SAFETY both node and client are guaranteed to be valid here
@@ -166,7 +146,7 @@ where
     /// `until_promise_resolved` in [`SpinOptions`][crate::SpinOptions].
     pub fn notify_on_service_ready(self: &Arc<Self>) -> Promise<()> {
         let client = Arc::clone(self);
-        self.handle.node.notify_on_graph_change(
+        self.sender.handle.node.notify_on_graph_change(
             // TODO(@mxgrey): Log any errors here once logging is available
             move || client.service_is_ready().is_ok_and(|r| r)
         )
@@ -234,11 +214,10 @@ where
             }),
             Some(Arc::clone(&commands.get_guard_condition())),
         );
-        commands.add_to_wait_set(waitable);
+        commands.add_waitable_to_wait_set(waitable);
 
         Ok(Arc::new(Self {
-            handle,
-            board,
+            sender: Arc::new(ClientRequestSender::new(handle, board)),
             lifecycle,
         }))
     }
@@ -249,10 +228,10 @@ where
     T: rosidl_runtime_rs::Service,
 {
     handle: Arc<ClientHandle>,
-    board: Arc<Mutex<ClientRequestBoard<T>>>
+    board: Arc<Mutex<ClientRequestBoard<T>>>,
 }
 
-impl<T> Executable for ClientExecutable<T>
+impl<T> RclExecutable for ClientExecutable<T>
 where
     T: rosidl_runtime_rs::Service,
 {
@@ -260,12 +239,12 @@ where
         self.board.lock().unwrap().execute(&self.handle)
     }
 
-    fn handle(&self) -> ExecutableHandle {
-        ExecutableHandle::Client(self.handle.lock())
+    fn handle(&self) -> RclExecutableHandle {
+        RclExecutableHandle::Client(self.handle.lock())
     }
 
-    fn kind(&self) -> ExecutableKind {
-        ExecutableKind::Client
+    fn kind(&self) -> RclExecutableKind {
+        RclExecutableKind::Client
     }
 }
 
@@ -367,6 +346,71 @@ where
             T::Response::from_rmw_message(response_out),
             service_info_out,
         ))
+    }
+}
+
+struct ClientRequestSender<T>
+where
+    T: rosidl_runtime_rs::Service,
+{
+    handle: Arc<ClientHandle>,
+    requests: Mutex<VecDeque<(T::Request, AnyClientOutputSender<T::Response>)>>,
+    board: Arc<Mutex<ClientRequestBoard<T>>>,
+}
+
+impl<T> Executable for ClientRequestSender<T>
+where
+    T: rosidl_runtime_rs::Service,
+{
+    fn execute(&self) {
+        for (request, sender) in self.requests.lock().unwrap().drain(..) {
+            let rmw_message = <T::Request as Message>::into_rmw_message(request.into_cow());
+            let mut sequence_number = -1;
+            if let Err(err) = unsafe {
+                // SAFETY: The client handle ensures the rcl_client is valid and
+                // our generic system ensures it has the correct type.
+                rcl_send_request(
+                    &*self.handle.lock() as *const _,
+                    rmw_message.as_ref() as *const <T::Request as Message>::RmwMsg as *mut _,
+                    &mut sequence_number,
+                )
+            }
+            .ok() {
+                // TODO(@mxgrey): Change this to a log when logging becomes available.
+                eprintln!("Failed to send client request: {err:?}");
+            }
+
+            println!("vvvvvvvvv Sent client request {sequence_number} vvvvvvvvvvvv");
+            // TODO(@mxgrey): Log errors here when logging becomes available.
+            self.board.lock().unwrap().new_request(sequence_number, sender);
+        }
+    }
+}
+
+impl<T> ClientRequestSender<T>
+where
+    T: rosidl_runtime_rs::Service,
+{
+    fn new(
+        handle: Arc<ClientHandle>,
+        board: Arc<Mutex<ClientRequestBoard<T>>>,
+    ) -> Self {
+        Self {
+            handle,
+            board,
+            requests: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    fn send(
+        self: &Arc<Self>,
+        request: T::Request,
+        sender: AnyClientOutputSender<T::Response>,
+    ) {
+        self.requests.lock().unwrap().push_back((request, sender));
+        self.handle.node.commands().stream_executable_to_wait_set(
+            Arc::clone(self) as Arc<dyn Executable>
+        );
     }
 }
 

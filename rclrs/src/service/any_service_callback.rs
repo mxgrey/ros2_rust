@@ -4,10 +4,10 @@ use crate::{
     error::ToResult,
     rcl_bindings::{
         rmw_request_id_t, rmw_service_info_t, rcl_take_request, rcl_take_request_with_info,
-        rcl_send_response,
     },
-    RequestId, ServiceInfo, ServiceHandle, ExecutorCommands,
-    RclrsError, RclReturnCode, MessageCow,
+    service::ServiceResponseSender,
+    RequestId, ServiceInfo, ServiceHandle,
+    RclrsError, RclReturnCode,
 };
 
 use futures::future::BoxFuture;
@@ -30,69 +30,43 @@ where
 impl<T: Service> AnyServiceCallback<T> {
     pub(super) fn execute(
         &mut self,
-        handle: &Arc<ServiceHandle>,
-        commands: &Arc<ExecutorCommands>,
+        response_sender: Arc<ServiceResponseSender<T>>,
     ) -> Result<(), RclrsError> {
-        let mut evaluate = || {
+        let evaluate = || {
             dbg!();
+            let commands = Arc::clone(&response_sender.commands);
             match self {
                 AnyServiceCallback::OnlyRequest(cb) => {
                     dbg!();
-                    let (msg, mut rmw_request_id) = Self::take_request(handle)?;
-                    let handle = Arc::clone(&handle);
+                    let (msg, rmw_request_id) = Self::take_request(&response_sender.handle)?;
                     let response = cb(msg);
                     dbg!();
                     let _ = commands.run(async move {
-                        // TODO(@mxgrey): Log any errors here when logging is available
-                        dbg!();
-                        println!("Sending service response: {rmw_request_id:?}");
-                        if let Err(err) = Self::send_response(&handle, &mut rmw_request_id, response.await) {
-                            // TODO(@mxgrey): Use logging instead when it becomes available
-                            eprintln!("Error while sending service response for {rmw_request_id:?}: {err}");
-                        } else {
-                            println!("No error while sending {rmw_request_id:?}");
-                        }
+                        response_sender.send(rmw_request_id, response.await);
                     });
                 }
                 AnyServiceCallback::WithId(cb) => {
                     dbg!();
-                    let (msg, mut rmw_request_id) = Self::take_request(handle)?;
+                    let (msg, rmw_request_id) = Self::take_request(&response_sender.handle)?;
                     let request_id = RequestId::from_rmw_request_id(&rmw_request_id);
-                    let handle = Arc::clone(&handle);
                     let response = cb(msg, request_id);
                     dbg!();
                     let _ = commands.run(async move {
-                        dbg!();
-                        println!("Sending service response: {rmw_request_id:?}");
-                        if let Err(err) = Self::send_response(&handle, &mut rmw_request_id, response.await) {
-                            // TODO(@mxgrey): Use logging instead when it becomes available
-                            eprintln!("Error while sending service response for {rmw_request_id:?}: {err}");
-                        } else {
-                            println!("No error while sending {rmw_request_id:?}");
-                        }
+                        response_sender.send(rmw_request_id, response.await);
                     });
                 }
                 AnyServiceCallback::WithInfo(cb) => {
                     dbg!();
-                    let (msg, rmw_service_info) = Self::take_request_with_info(handle)?;
-                    let mut rmw_request_id = rmw_request_id_t {
+                    let (msg, rmw_service_info) = Self::take_request_with_info(&response_sender.handle)?;
+                    let rmw_request_id = rmw_request_id_t {
                         writer_guid: rmw_service_info.request_id.writer_guid,
                         sequence_number: rmw_service_info.request_id.sequence_number,
                     };
                     let service_info = ServiceInfo::from_rmw_service_info(&rmw_service_info);
-                    let handle = Arc::clone(&handle);
                     let response = cb(msg, service_info);
                     dbg!();
                     let _ = commands.run(async move {
-                        // TODO(@mxgrey): Log any errors here when logging is available
-                        dbg!();
-                        println!("Sending service response: {rmw_request_id:?}");
-                        if let Err(err) = Self::send_response(&handle, &mut rmw_request_id, response.await) {
-                            // TODO(@mxgrey): Use logging instead when it becomes available
-                            eprintln!("Error while sending service response for {rmw_request_id:?}: {err}");
-                        } else {
-                            println!("No error while sending {rmw_request_id:?}");
-                        }
+                        response_sender.send(rmw_request_id, response.await);
                     });
                 }
             }
@@ -173,22 +147,5 @@ impl<T: Service> AnyServiceCallback<T> {
         .ok()?;
         println!("^^^^^^^^^^^^ service request arrived: {service_info_out:?} ^^^^^^^^^^^^^");
         Ok((T::Request::from_rmw_message(request_out), service_info_out))
-    }
-
-    fn send_response(
-        handle: &Arc<ServiceHandle>,
-        request_id: &mut rmw_request_id_t,
-        response: T::Response,
-    ) -> Result<(), RclrsError> {
-        let rmw_message = <T::Response as Message>::into_rmw_message(response.into_cow());
-        let handle = &*handle.lock();
-        unsafe {
-            rcl_send_response(
-                handle,
-                request_id,
-                rmw_message.as_ref() as *const <T::Response as Message>::RmwMsg as *mut _,
-            )
-        }
-        .ok()
     }
 }

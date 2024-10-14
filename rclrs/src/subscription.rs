@@ -11,8 +11,8 @@ use crate::{
     error::ToResult,
     qos::QoSProfile,
     rcl_bindings::*,
-    ExecutorCommands, NodeHandle, RclrsError, Waitable, Executable, ExecutableHandle,
-    ExecutableKind, GuardCondition, WaitableLifecycle, ENTITY_LIFECYCLE_MUTEX,
+    ExecutorCommands, NodeHandle, RclrsError, Waitable, RclExecutable, RclExecutableHandle,
+    RclExecutableKind, GuardCondition, WaitableLifecycle, ENTITY_LIFECYCLE_MUTEX,
 };
 
 mod any_subscription_callback;
@@ -132,7 +132,7 @@ where
             Arc::clone(&commands),
         ));
 
-        commands.add_to_wait_set(waiter);
+        commands.add_waitable_to_wait_set(waiter);
 
         Ok(subscription)
     }
@@ -208,7 +208,7 @@ struct SubscriptionExecutable<T: Message> {
     action: UnboundedSender<SubscriptionAction<T>>,
 }
 
-impl<T> Executable for SubscriptionExecutable<T>
+impl<T> RclExecutable for SubscriptionExecutable<T>
 where
     T: Message,
 {
@@ -217,12 +217,12 @@ where
         Ok(())
     }
 
-    fn kind(&self) -> crate::ExecutableKind {
-        ExecutableKind::Subscription
+    fn kind(&self) -> crate::RclExecutableKind {
+        RclExecutableKind::Subscription
     }
 
-    fn handle(&self) -> ExecutableHandle {
-        ExecutableHandle::Subscription(self.handle.lock())
+    fn handle(&self) -> RclExecutableHandle {
+        RclExecutableHandle::Subscription(self.handle.lock())
     }
 }
 
