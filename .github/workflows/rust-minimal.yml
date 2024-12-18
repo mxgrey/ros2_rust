@@ -68,9 +68,12 @@ jobs:
         sudo pip3 install git+https://github.com/colcon/colcon-ros-cargo.git
 
     - name: Lock versions of dependencies compatible with minimum compiler version
+      # cargo add will return an error code because colcon-ros-cargo has not
+      # generated a patch file for the message packages yet, but we need to run
+      # this step before colcon build or else we
       run: |
         cd rclrs
-        cargo add home@=0.5.9
+        cargo add home@=0.5.9 || true
         cd -
 
     - name: Check formatting of Rust packages
