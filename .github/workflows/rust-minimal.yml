@@ -67,6 +67,12 @@ jobs:
         sudo pip3 install git+https://github.com/colcon/colcon-cargo.git
         sudo pip3 install git+https://github.com/colcon/colcon-ros-cargo.git
 
+    - name: Lock versions of dependencies compatible with minimum compiler version
+      run: |
+        cd rclrs
+        cargo add home@=0.5.9
+        cd -
+
     - name: Check formatting of Rust packages
       run: |
         for path in $(colcon list | awk '$3 == "(ament_cargo)" { print $2 }'); do
