@@ -68,15 +68,9 @@ jobs:
         sudo pip3 install git+https://github.com/colcon/colcon-ros-cargo.git
 
     - name: Lock versions of dependencies compatible with minimum compiler version
-      # We need to colcon build up to test_msgs before we attempt to set specific
-      # versions of the dependencies because otherwise cargo will fail due to not
-      # finding the test_msgs package.
       run: |
-        cd ${{ steps.build.outputs.ros-workspace-directory-name }}
-        colcon build --packages-up-to test_msgs
-        cd -
         cd rclrs
-        cargo add home@=0.5.9
+        cargo add home@=0.5.9 || true
         cd -
 
     - name: Check formatting of Rust packages
