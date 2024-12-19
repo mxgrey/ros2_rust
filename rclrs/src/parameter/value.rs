@@ -376,10 +376,23 @@ impl From<ParameterValue> for RmwParameterValue {
 
 /// An error that occured when trying to convert a parameter from an
 /// `rcl_interfaces::msg::ParameterValue`
+#[derive(Debug)]
 pub enum RmwParameterConversionError {
     /// The parameter type was not valid.
     InvalidParameterType,
 }
+
+impl std::fmt::Display for RmwParameterConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RmwParameterConversionError::InvalidParameterType => {
+                write!(f, "the parameter type was not valid")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RmwParameterConversionError {}
 
 impl TryFrom<RmwParameterValue> for ParameterValue {
     type Error = RmwParameterConversionError;
@@ -460,25 +473,23 @@ impl ParameterValue {
             ParameterValue::String(s.into())
         } else if !var.byte_array_value.is_null() {
             let rcl_byte_array = &*var.byte_array_value;
-            let slice = std::slice::from_raw_parts(rcl_byte_array.values, rcl_byte_array.size);
+            let slice = rcl_from_raw_parts(rcl_byte_array.values, rcl_byte_array.size);
             ParameterValue::ByteArray(slice.into())
         } else if !var.bool_array_value.is_null() {
             let rcl_bool_array = &*var.bool_array_value;
-            let slice = std::slice::from_raw_parts(rcl_bool_array.values, rcl_bool_array.size);
+            let slice = rcl_from_raw_parts(rcl_bool_array.values, rcl_bool_array.size);
             ParameterValue::BoolArray(slice.into())
         } else if !var.integer_array_value.is_null() {
             let rcl_integer_array = &*var.integer_array_value;
-            let slice =
-                std::slice::from_raw_parts(rcl_integer_array.values, rcl_integer_array.size);
+            let slice = rcl_from_raw_parts(rcl_integer_array.values, rcl_integer_array.size);
             ParameterValue::IntegerArray(slice.into())
         } else if !var.double_array_value.is_null() {
             let rcl_double_array = &*var.double_array_value;
-            let slice = std::slice::from_raw_parts(rcl_double_array.values, rcl_double_array.size);
+            let slice = rcl_from_raw_parts(rcl_double_array.values, rcl_double_array.size);
             ParameterValue::DoubleArray(slice.into())
         } else if !var.string_array_value.is_null() {
             let rcutils_string_array = &*var.string_array_value;
-            let slice =
-                std::slice::from_raw_parts(rcutils_string_array.data, rcutils_string_array.size);
+            let slice = rcl_from_raw_parts(rcutils_string_array.data, rcutils_string_array.size);
             let strings = slice
                 .iter()
                 .map(|&ptr| {
