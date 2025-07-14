@@ -174,6 +174,7 @@
 //! # Ok::<(), RclrsError>(())
 //! ```
 
+mod action;
 mod arguments;
 mod client;
 mod clock;
@@ -201,6 +202,7 @@ mod rcl_bindings;
 #[cfg(feature = "dyn_msg")]
 pub mod dynamic_message;
 
+pub use action::*;
 pub use arguments::*;
 pub use client::*;
 pub use clock::*;
