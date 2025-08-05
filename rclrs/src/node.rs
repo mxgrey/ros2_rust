@@ -33,7 +33,7 @@ use crate::{
     IntoAsyncServiceCallback, IntoAsyncSubscriptionCallback, IntoNodeServiceCallback,
     IntoNodeSubscriptionCallback, LogParams, Logger, ParameterBuilder, ParameterInterface,
     ParameterVariant, Parameters, Promise, Publisher, PublisherOptions, PublisherState, RclrsError,
-    Service, ServiceOptions, ServiceState, Subscription, SubscriptionOptions, SubscriptionState,
+    Service, ServiceOptions, ServiceState, Subscription, SubscriptionOptions, SubscriptionReceiver, SubscriptionState,
     TimeSource, ToLogParams, Worker, WorkerOptions, WorkerState, ENTITY_LIFECYCLE_MUTEX,
 };
 
@@ -888,6 +888,54 @@ impl NodeState {
         SubscriptionState::<T, Node>::create(
             options,
             callback.into_async_subscription_callback(),
+            &self.handle,
+            self.commands.async_worker_commands(),
+        )
+    }
+
+    /// Create a [`SubscriptionReceiver`] which allows you to await and receive
+    /// the messages that arrive for a subscription.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rclrs::*;
+    /// # use example_interfaces::msg::Int32;
+    /// let mut executor = Context::default().create_basic_executor();
+    ///
+    ///  let node = executor
+    ///     .create_node(&format!("test_subscription_receiver_{}", line!()))
+    ///     .unwrap();
+    ///
+    /// let mut receiver = node.create_subscription_receiver::<Int32>("receiver_test_topic")?;
+    /// let publisher = node.create_publisher::<Int32>("receiver_test_topic")?;
+    ///
+    /// for data in 0..10 {
+    ///     publisher.publish(Int32 { data }).unwrap();
+    /// }
+    ///
+    /// let promise = executor.commands().run(async move {
+    ///     for expected_data in 0..10 {
+    ///         let msg = receiver.recv().await.unwrap();
+    ///         assert_eq!(msg.data, expected_data);
+    ///     }
+    ///
+    ///     // We are not expecting any more messages, so let this task end and
+    ///     // the promise will resolve so the executor will stop.
+    /// });
+    ///
+    /// executor.spin(SpinOptions::default().until_promise_resolved(promise));
+    /// # Ok::<(), RclrsError>(())
+    /// ```
+    pub fn create_subscription_receiver<'a, T>(
+        &self,
+        options: impl Into<SubscriptionOptions<'a>>,
+    ) -> Result<SubscriptionReceiver<T>, RclrsError>
+    where
+        T: Message,
+    {
+        SubscriptionReceiver::<T>::create(
+            options,
             &self.handle,
             self.commands.async_worker_commands(),
         )
