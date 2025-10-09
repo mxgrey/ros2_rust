@@ -33,6 +33,9 @@ pub use message_info::*;
 mod readonly_loaned_message;
 pub use readonly_loaned_message::*;
 
+mod subscription_receiver;
+pub use subscription_receiver::*;
+
 mod worker_subscription_callback;
 pub use worker_subscription_callback::*;
 
