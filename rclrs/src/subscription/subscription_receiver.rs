@@ -66,7 +66,7 @@ impl<T: Message> SubscriptionReceiver<T> {
 mod tests {
 
     use crate::*;
-    use example_interfaces::msg::Int32;
+    use crate::vendor::example_interfaces::msg::Int32;
 
     #[test]
     fn test_subscription_receiver() {
