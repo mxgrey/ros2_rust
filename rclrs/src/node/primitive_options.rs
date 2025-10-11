@@ -3,6 +3,12 @@ use crate::{
     QoSReliabilityPolicy,
 };
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
+#[cfg(feature = "schemars")]
+use schemars::JsonSchema;
+
 use std::{borrow::Borrow, time::Duration};
 
 /// `PrimitiveOptions` are the subset of options that are relevant across all
@@ -20,6 +26,8 @@ use std::{borrow::Borrow, time::Duration};
 /// [2]: crate::Publisher
 /// [3]: crate::Client
 /// [4]: crate::Service
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub struct PrimitiveOptions<'a> {
