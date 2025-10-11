@@ -2,6 +2,9 @@ pub mod rmw {
     #[cfg(feature = "serde")]
     use serde::{Deserialize, Serialize};
 
+    #[cfg(feature = "schemars")]
+    use schemars::JsonSchema;
+
     #[link(name = "builtin_interfaces__rosidl_typesupport_c")]
     extern "C" {
         fn rosidl_typesupport_c__get_message_type_support_handle__builtin_interfaces__msg__Duration(
@@ -27,6 +30,7 @@ pub mod rmw {
     // Corresponds to builtin_interfaces__msg__Duration
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct Duration {
         pub sec: i32,
@@ -113,6 +117,7 @@ pub mod rmw {
     // Corresponds to builtin_interfaces__msg__Time
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct Time {
         pub sec: i32,
@@ -179,7 +184,11 @@ pub mod rmw {
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schemars")]
+use schemars::JsonSchema;
+
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct Duration {
     pub sec: i32,
@@ -219,6 +228,7 @@ impl rosidl_runtime_rs::Message for Duration {
 }
 
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct Time {
     pub sec: i32,

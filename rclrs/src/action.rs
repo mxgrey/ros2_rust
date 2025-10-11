@@ -15,9 +15,12 @@ use std::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schemars")]
+use schemars::JsonSchema;
+
 /// A unique identifier for a goal request.
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize), serde(transparent))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GoalUuid(pub [u8; RCL_ACTION_UUID_SIZE]);
 
@@ -73,8 +76,12 @@ impl From<&[u8; RCL_ACTION_UUID_SIZE]> for GoalUuid {
 }
 
 /// The response returned by an [`ActionServer`]'s cancel callback when a goal is requested to be cancelled.
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", serde(rename = "snake_case"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize, Serialize),
+    serde(rename = "snake_case")
+)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[repr(i8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CancelResponseCode {
@@ -156,8 +163,12 @@ impl MultiCancelResponse {
 }
 
 /// Values defined by `action_msgs/msg/GoalStatus`
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", serde(rename = "snake_case"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize, Serialize),
+    serde(rename = "snake_case")
+)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[repr(i8)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GoalStatusCode {
@@ -203,6 +214,7 @@ impl From<i8> for GoalStatusCode {
 /// A status update for a goal. Includes the status code, the goal uuid, and the
 /// timestamp of when the status was set by the action server.
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct GoalStatus {
     /// The status code describing what status was set by the action server.

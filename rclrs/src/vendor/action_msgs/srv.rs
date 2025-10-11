@@ -1,7 +1,11 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schemars")]
+use schemars::JsonSchema;
+
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CancelGoal_Request {
     pub goal_info: crate::vendor::action_msgs::msg::GoalInfo,
@@ -43,6 +47,7 @@ impl rosidl_runtime_rs::Message for CancelGoal_Request {
 }
 
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CancelGoal_Response {
     pub return_code: i8,
@@ -148,9 +153,11 @@ impl rosidl_runtime_rs::Service for CancelGoal {
 }
 
 pub mod rmw {
-
     #[cfg(feature = "serde")]
     use serde::{Deserialize, Serialize};
+
+    #[cfg(feature = "schemars")]
+    use schemars::JsonSchema;
 
     #[link(name = "action_msgs__rosidl_typesupport_c")]
     extern "C" {
@@ -177,6 +184,7 @@ pub mod rmw {
     // Corresponds to action_msgs__srv__CancelGoal_Request
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct CancelGoal_Request {
         pub goal_info: crate::vendor::action_msgs::msg::rmw::GoalInfo,
@@ -264,6 +272,7 @@ pub mod rmw {
     // Corresponds to action_msgs__srv__CancelGoal_Response
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct CancelGoal_Response {
         pub return_code: i8,

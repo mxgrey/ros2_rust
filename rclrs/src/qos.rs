@@ -2,6 +2,12 @@ use std::time::Duration;
 
 use crate::rcl_bindings::*;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "schemars")]
+use schemars::JsonSchema;
+
 /// The `HISTORY` DDS QoS policy.
 ///
 /// A subscription internally maintains a queue of messages (called "samples" in DDS) that have not
@@ -22,6 +28,12 @@ use crate::rcl_bindings::*;
 /// | KeepAll | KeepLast | yes |
 /// | KeepAll | KeepAll | yes |
 ///
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize, Serialize),
+    serde(rename = "snake_case")
+)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum QoSHistoryPolicy {
     /// Use the default policy of the RMW layer.
@@ -53,6 +65,12 @@ pub enum QoSHistoryPolicy {
 /// | BestEffort | Reliable | no | - |
 /// | BestEffort | BestEffort | yes | Best effort |
 ///
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize, Serialize),
+    serde(rename = "snake_case")
+)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum QoSReliabilityPolicy {
     /// Use the default policy of the RMW layer.
@@ -78,6 +96,12 @@ pub enum QoSReliabilityPolicy {
 /// | Volatile | TransientLocal | no | - |
 /// | Volatile | Volatile | yes | Deliver only new messages |
 ///
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize, Serialize),
+    serde(rename = "snake_case")
+)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum QoSDurabilityPolicy {
     /// Use the default policy of the RMW layer.
@@ -103,6 +127,12 @@ pub enum QoSDurabilityPolicy {
 /// | ManualByTopic | Automatic | yes |
 /// | ManualByTopic | ManualByTopic | yes |
 ///
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize, Serialize),
+    serde(rename = "snake_case")
+)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum QoSLivelinessPolicy {
     /// Use the default policy of the RMW layer.
@@ -116,6 +146,12 @@ pub enum QoSLivelinessPolicy {
 }
 
 /// A duration that can take two special values: System default and infinite.
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize, Serialize),
+    serde(rename = "snake_case")
+)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum QoSDuration {
     /// This will use the RMW implementation's default value,
@@ -145,6 +181,8 @@ pub enum QoSDuration {
 /// ```
 ///
 /// [1]: https://docs.ros.org/en/rolling/Concepts/About-Quality-of-Service-Settings.html
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct QoSProfile {
     /// The history policy.

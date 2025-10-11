@@ -1,6 +1,6 @@
 use crate::{
-    IntoNodeSubscriptionCallback, NodeHandle, RclrsError, Subscription,
-    SubscriptionOptions, SubscriptionState, WorkerCommands
+    IntoNodeSubscriptionCallback, NodeHandle, RclrsError, Subscription, SubscriptionOptions,
+    SubscriptionState, WorkerCommands,
 };
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
@@ -45,28 +45,25 @@ impl<T: Message> SubscriptionReceiver<T> {
     ) -> Result<Self, RclrsError> {
         let (sender, receiver) = unbounded_channel();
 
-        let callback = (
-            move |msg: T| {
-                let _ = sender.send(msg);
-            }
-        ).into_node_subscription_callback();
+        let callback = (move |msg: T| {
+            let _ = sender.send(msg);
+        })
+        .into_node_subscription_callback();
 
-        let subscription = SubscriptionState::create(
-            options,
-            callback,
-            node_handle,
-            commands,
-        )?;
+        let subscription = SubscriptionState::create(options, callback, node_handle, commands)?;
 
-        Ok(Self { receiver, subscription })
+        Ok(Self {
+            receiver,
+            subscription,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::*;
     use crate::vendor::example_interfaces::msg::Int32;
+    use crate::*;
 
     #[test]
     fn test_subscription_receiver() {
@@ -76,8 +73,12 @@ mod tests {
             .create_node(&format!("test_subscription_receiver_{}", line!()))
             .unwrap();
 
-        let mut receiver = node.create_subscription_receiver::<Int32>("receiver_test_topic").unwrap();
-        let publisher = node.create_publisher::<Int32>("receiver_test_topic").unwrap();
+        let mut receiver = node
+            .create_subscription_receiver::<Int32>("receiver_test_topic")
+            .unwrap();
+        let publisher = node
+            .create_publisher::<Int32>("receiver_test_topic")
+            .unwrap();
 
         for data in 0..10 {
             publisher.publish(Int32 { data }).unwrap();

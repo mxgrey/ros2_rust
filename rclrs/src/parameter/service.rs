@@ -127,7 +127,7 @@ fn list_parameters(req: ListParameters_Request, map: &ParameterMap) -> ListParam
         if req.depth == ListParameters_Request::DEPTH_RECURSIVE {
             return true;
         }
-        u64::try_from(substring.iter().filter(|c| **c == ('.' as _)).count()).unwrap() < req.depth
+        u64::try_from(substring.iter().filter(|c| **c == ('.' as i8)).count()).unwrap() < req.depth
     };
     let names: Sequence<_> = map
         .storage

@@ -229,8 +229,5 @@ pub use wait_set::*;
 pub use worker::*;
 
 pub use rosidl_runtime_rs::{
-    Message as MessageIDL,
-    RmwMessage as RmwMessageIDL,
-    Service as ServiceIDL,
-    Action as ActionIDL,
+    Action as ActionIDL, Message as MessageIDL, RmwMessage as RmwMessageIDL, Service as ServiceIDL,
 };

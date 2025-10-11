@@ -2,6 +2,9 @@ pub mod rmw {
     #[cfg(feature = "serde")]
     use serde::{Deserialize, Serialize};
 
+    #[cfg(feature = "schemars")]
+    use schemars::JsonSchema;
+
     #[link(name = "action_msgs__rosidl_typesupport_c")]
     extern "C" {
         fn rosidl_typesupport_c__get_message_type_support_handle__action_msgs__msg__GoalInfo(
@@ -27,6 +30,7 @@ pub mod rmw {
     // Corresponds to action_msgs__msg__GoalInfo
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct GoalInfo {
         pub goal_id: crate::vendor::unique_identifier_msgs::msg::rmw::UUID,
@@ -113,6 +117,7 @@ pub mod rmw {
     // Corresponds to action_msgs__msg__GoalStatus
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct GoalStatus {
         pub goal_info: crate::vendor::action_msgs::msg::rmw::GoalInfo,
@@ -218,6 +223,7 @@ pub mod rmw {
     // Corresponds to action_msgs__msg__GoalStatusArray
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct GoalStatusArray {
         pub status_list:
@@ -283,7 +289,11 @@ pub mod rmw {
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schemars")]
+use schemars::JsonSchema;
+
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct GoalInfo {
     pub goal_id: crate::vendor::unique_identifier_msgs::msg::UUID,
@@ -337,6 +347,7 @@ impl rosidl_runtime_rs::Message for GoalInfo {
 }
 
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct GoalStatus {
     pub goal_info: crate::vendor::action_msgs::msg::GoalInfo,
@@ -400,6 +411,7 @@ impl rosidl_runtime_rs::Message for GoalStatus {
 }
 
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct GoalStatusArray {
     pub status_list: Vec<crate::vendor::action_msgs::msg::GoalStatus>,

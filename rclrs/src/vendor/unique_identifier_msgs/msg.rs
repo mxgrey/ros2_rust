@@ -2,6 +2,9 @@ pub mod rmw {
     #[cfg(feature = "serde")]
     use serde::{Deserialize, Serialize};
 
+    #[cfg(feature = "schemars")]
+    use schemars::JsonSchema;
+
     #[link(name = "unique_identifier_msgs__rosidl_typesupport_c")]
     extern "C" {
         fn rosidl_typesupport_c__get_message_type_support_handle__unique_identifier_msgs__msg__UUID(
@@ -27,6 +30,7 @@ pub mod rmw {
     // Corresponds to unique_identifier_msgs__msg__UUID
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+    #[cfg_attr(feature = "schemars", derive(JsonSchema))]
     #[derive(Clone, Debug, PartialEq, PartialOrd)]
     pub struct UUID {
         pub uuid: [u8; 16],
@@ -91,7 +95,11 @@ pub mod rmw {
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "schemars")]
+use schemars::JsonSchema;
+
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct UUID {
     pub uuid: [u8; 16],

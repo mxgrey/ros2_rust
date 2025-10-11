@@ -36,8 +36,8 @@ use crate::{
     IntoAsyncSubscriptionCallback, IntoNodeServiceCallback, IntoNodeSubscriptionCallback,
     LogParams, Logger, ParameterBuilder, ParameterInterface, ParameterVariant, Parameters, Promise,
     Publisher, PublisherOptions, PublisherState, RclrsError, RequestedGoal, Service,
-    ServiceOptions, ServiceState, Subscription, SubscriptionOptions, SubscriptionReceiver, SubscriptionState,
-    TerminatedGoal, TimeSource, ToLogParams, Worker, WorkerOptions, WorkerState,
+    ServiceOptions, ServiceState, Subscription, SubscriptionOptions, SubscriptionReceiver,
+    SubscriptionState, TerminatedGoal, TimeSource, ToLogParams, Worker, WorkerOptions, WorkerState,
     ENTITY_LIFECYCLE_MUTEX,
 };
 
