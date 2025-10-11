@@ -249,7 +249,7 @@ impl<'a> SubscriptionOptions<'a> {
 impl<'a, T: IntoPrimitiveOptions<'a>> From<T> for SubscriptionOptions<'a> {
     fn from(value: T) -> Self {
         let primitive = value.into_primitive_options();
-        let mut options = Self::new(primitive.name);
+        let mut options = Self::new(primitive.topic);
         primitive.qos.apply_to(&mut options.qos);
         options
     }

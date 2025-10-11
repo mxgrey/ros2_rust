@@ -35,7 +35,7 @@ use std::{
 #[non_exhaustive]
 pub struct PrimitiveOptions<'a> {
     /// The name that will be used for the primitive
-    pub name: Cow<'a, str>,
+    pub topic: Cow<'a, str>,
     /// Options related to quality of service
     #[cfg_attr(feature = "serde", serde(flatten))]
     pub qos: QosOptions,
@@ -45,7 +45,7 @@ impl<'a> PrimitiveOptions<'a> {
     /// Begin building a new set of `PrimitiveOptions` with only the name set.
     pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            name: name.into(),
+            topic: name.into(),
             qos: Default::default(),
         }
     }
