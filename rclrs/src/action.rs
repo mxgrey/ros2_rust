@@ -275,9 +275,10 @@ mod tests {
 
         let order_10_sequence = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
 
-        let request = client.request_goal(Fibonacci_Goal { order: 10 });
-
+        let async_client = client.clone();
         let promise = executor.commands().run(async move {
+            async_client.notify_on_action_ready().await.unwrap();
+            let request = async_client.request_goal(Fibonacci_Goal { order: 10 });
             let mut goal_client_stream = request.await.unwrap().stream();
             let mut expected_feedback_len = 0;
             while let Some(event) = goal_client_stream.next().await {

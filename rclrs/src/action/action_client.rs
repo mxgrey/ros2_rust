@@ -6,7 +6,7 @@ use crate::{
     CancelResponse, CancelResponseCode, DropGuard, GoalStatus, GoalStatusCode, GoalUuid,
     MultiCancelResponse, Node, NodeHandle, QoSProfile, RclPrimitive, RclPrimitiveHandle,
     RclPrimitiveKind, RclrsError, ReadyKind, TakeFailedAsNone, ToResult, Waitable,
-    WaitableLifecycle, ENTITY_LIFECYCLE_MUTEX,
+    WaitableLifecycle, ENTITY_LIFECYCLE_MUTEX, Promise,
 };
 use rosidl_runtime_rs::{Action, Message, RmwFeedbackMessage, RmwGoalResponse, RmwResultResponse};
 use std::{
@@ -130,6 +130,36 @@ impl<A: Action> ActionClientState<A> {
         goal: A::Goal,
     ) -> Result<RequestedGoalClient<A>, RclrsError> {
         self.board.request_goal(self, goal)
+    }
+
+    /// Check if an action server is available and ready for this client.
+    ///
+    /// Will return true if there is an action server available, false if unavailable.
+    ///
+    /// Consider using [`Self::notify_on_action_ready`] if you want to wait
+    /// until an action for this client is ready.
+    pub fn action_is_ready(&self) -> Result<bool, RclrsError> {
+        let mut is_ready = false;
+        let client = &*self.board.handle.rcl_action_client.lock().unwrap();
+        let node = &*self.board.node.handle().rcl_node.lock().unwrap();
+
+        unsafe {
+            // SAFETY: both node and client are guaranteed to be valid here
+            // and the client is guaranteed to belong to the node
+            rcl_action_server_is_available(node as *const _, client as *const _, &mut is_ready)
+        }
+        .ok()?;
+        Ok(is_ready)
+    }
+
+    /// Get a promise that will be fulfilled when an action is ready for this
+    /// client. You can `.await` the promise in an async function or use it for
+    /// `until_promise_resolved` in [`SpinOptions`][crate::SpinOptions].
+    pub fn notify_on_action_ready(self: &Arc<Self>) -> Promise<()> {
+        let client = Arc::clone(self);
+        self.board
+            .node
+            .notify_on_graph_change(move || client.action_is_ready().is_ok_and(|r| r))
     }
 
     /// Get a client to receive feedback for a specific goal.

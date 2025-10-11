@@ -267,8 +267,8 @@ where
     /// until a service for this client is ready.
     pub fn service_is_ready(&self) -> Result<bool, RclrsError> {
         let mut is_ready = false;
-        let client = &mut *self.handle.rcl_client.lock().unwrap();
-        let node = &mut *self.handle.node.handle().rcl_node.lock().unwrap();
+        let client = &*self.handle.rcl_client.lock().unwrap();
+        let node = &*self.handle.node.handle().rcl_node.lock().unwrap();
 
         unsafe {
             // SAFETY both node and client are guaranteed to be valid here
