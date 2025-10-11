@@ -128,6 +128,7 @@ impl From<i8> for CancelResponseCode {
 /// When a cancellation request might cancel multiple goals, [`MultiCancelResponse`]
 /// will be used.
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct CancelResponse {
     /// What kind of response was given.
