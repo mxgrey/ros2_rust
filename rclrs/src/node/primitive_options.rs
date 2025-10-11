@@ -9,7 +9,10 @@ use serde::{Serialize, Deserialize};
 #[cfg(feature = "schemars")]
 use schemars::JsonSchema;
 
-use std::{borrow::Borrow, time::Duration};
+use std::{
+    borrow::{Borrow, Cow},
+    time::Duration,
+};
 
 /// `PrimitiveOptions` are the subset of options that are relevant across all
 /// primitives (e.g. [`Subscription`][1], [`Publisher`][2], [`Client`][3], and
@@ -28,11 +31,11 @@ use std::{borrow::Borrow, time::Duration};
 /// [4]: crate::Service
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct PrimitiveOptions<'a> {
     /// The name that will be used for the primitive
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// Override the default [`QoSProfile::history`] for the primitive.
     pub history: Option<QoSHistoryPolicy>,
     /// Override the default [`QoSProfile::reliability`] for the primitive.
@@ -244,9 +247,9 @@ impl<'a, T: Borrow<str>> IntoPrimitiveOptions<'a> for &'a T {
 
 impl<'a> PrimitiveOptions<'a> {
     /// Begin building a new set of `PrimitiveOptions` with only the name set.
-    pub fn new(name: &'a str) -> Self {
+    pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            name,
+            name: name.into(),
             history: None,
             reliability: None,
             durability: None,

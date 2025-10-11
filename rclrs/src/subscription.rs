@@ -1,5 +1,6 @@
 use std::{
     any::Any,
+    borrow::Cow,
     ffi::{CStr, CString},
     sync::{Arc, Mutex, MutexGuard},
 };
@@ -127,7 +128,7 @@ where
         let mut rcl_subscription = unsafe { rcl_get_zero_initialized_subscription() };
         let type_support =
             <T as Message>::RmwMsg::get_type_support() as *const rosidl_message_type_support_t;
-        let topic_c_string = CString::new(topic).map_err(|err| RclrsError::StringContainsNul {
+        let topic_c_string = CString::new(topic.as_bytes()).map_err(|err| RclrsError::StringContainsNul {
             err,
             s: topic.into(),
         })?;
@@ -230,16 +231,16 @@ impl<T: Message, Payload: 'static + Send + Sync> SubscriptionState<T, Worker<Pay
 #[non_exhaustive]
 pub struct SubscriptionOptions<'a> {
     /// The topic name for the subscription.
-    pub topic: &'a str,
+    pub topic: Cow<'a, str>,
     /// The quality of service settings for the subscription.
     pub qos: QoSProfile,
 }
 
 impl<'a> SubscriptionOptions<'a> {
     /// Initialize a new [`SubscriptionOptions`] with default settings.
-    pub fn new(topic: &'a str) -> Self {
+    pub fn new(topic: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            topic,
+            topic: topic.into(),
             qos: QoSProfile::topics_default(),
         }
     }
@@ -248,7 +249,7 @@ impl<'a> SubscriptionOptions<'a> {
 impl<'a, T: IntoPrimitiveOptions<'a>> From<T> for SubscriptionOptions<'a> {
     fn from(value: T) -> Self {
         let primitive = value.into_primitive_options();
-        let mut options = Self::new(primitive.name);
+        let mut options = Self::new(primitive.name.clone());
         primitive.apply_to(&mut options.qos);
         options
     }

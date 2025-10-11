@@ -1,5 +1,6 @@
 use std::{
     any::Any,
+    borrow::Cow,
     boxed::Box,
     ffi::{CStr, CString},
     sync::{Arc, Mutex, MutexGuard},
@@ -110,7 +111,7 @@ where
         let mut rcl_service = unsafe { rcl_get_zero_initialized_service() };
         let type_support = <T as rosidl_runtime_rs::Service>::get_type_support()
             as *const rosidl_service_type_support_t;
-        let topic_c_string = CString::new(name).map_err(|err| RclrsError::StringContainsNul {
+        let topic_c_string = CString::new(name.as_bytes()).map_err(|err| RclrsError::StringContainsNul {
             err,
             s: name.into(),
         })?;
@@ -214,16 +215,16 @@ impl<T: ServiceIDL, Payload: 'static + Send + Sync> ServiceState<T, Worker<Paylo
 #[non_exhaustive]
 pub struct ServiceOptions<'a> {
     /// The name for the service
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// The quality of service profile for the service.
     pub qos: QoSProfile,
 }
 
 impl<'a> ServiceOptions<'a> {
     /// Initialize a new [`ServiceOptions`] with default settings.
-    pub fn new(name: &'a str) -> Self {
+    pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            name,
+            name: name.into(),
             qos: QoSProfile::services_default(),
         }
     }
@@ -232,7 +233,7 @@ impl<'a> ServiceOptions<'a> {
 impl<'a, T: IntoPrimitiveOptions<'a>> From<T> for ServiceOptions<'a> {
     fn from(value: T) -> Self {
         let primitive = value.into_primitive_options();
-        let mut options = Self::new(primitive.name);
+        let mut options = Self::new(primitive.name.clone());
         primitive.apply_to(&mut options.qos);
         options
     }

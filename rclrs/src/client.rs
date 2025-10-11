@@ -1,5 +1,6 @@
 use std::{
     any::Any,
+    borrow::Cow,
     collections::HashMap,
     ffi::{CStr, CString},
     sync::{Arc, Mutex, MutexGuard},
@@ -314,7 +315,7 @@ where
         let type_support = <T as rosidl_runtime_rs::Service>::get_type_support()
             as *const rosidl_service_type_support_t;
         let topic_c_string =
-            CString::new(service_name).map_err(|err| RclrsError::StringContainsNul {
+            CString::new(service_name.as_bytes()).map_err(|err| RclrsError::StringContainsNul {
                 err,
                 s: service_name.into(),
             })?;
@@ -379,16 +380,16 @@ where
 #[non_exhaustive]
 pub struct ClientOptions<'a> {
     /// The name of the service that this client will send requests to
-    pub service_name: &'a str,
+    pub service_name: Cow<'a, str>,
     /// The quality of the service profile for this client
     pub qos: QoSProfile,
 }
 
 impl<'a> ClientOptions<'a> {
     /// Initialize a new [`ClientOptions`] with default settings.
-    pub fn new(service_name: &'a str) -> Self {
+    pub fn new(service_name: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            service_name,
+            service_name: service_name.into(),
             qos: QoSProfile::services_default(),
         }
     }
@@ -397,7 +398,7 @@ impl<'a> ClientOptions<'a> {
 impl<'a, T: IntoPrimitiveOptions<'a>> From<T> for ClientOptions<'a> {
     fn from(value: T) -> Self {
         let primitive = value.into_primitive_options();
-        let mut options = Self::new(primitive.name);
+        let mut options = Self::new(primitive.name.clone());
         primitive.apply_to(&mut options.qos);
         options
     }

@@ -109,7 +109,7 @@ where
         let mut rcl_publisher = unsafe { rcl_get_zero_initialized_publisher() };
         let type_support_ptr =
             <T as Message>::RmwMsg::get_type_support() as *const rosidl_message_type_support_t;
-        let topic_c_string = CString::new(topic).map_err(|err| RclrsError::StringContainsNul {
+        let topic_c_string = CString::new(topic.as_bytes()).map_err(|err| RclrsError::StringContainsNul {
             err,
             s: topic.into(),
         })?;
@@ -288,16 +288,16 @@ where
 #[non_exhaustive]
 pub struct PublisherOptions<'a> {
     /// The topic name for the publisher.
-    pub topic: &'a str,
+    pub topic: Cow<'a, str>,
     /// The quality of service settings for the publisher.
     pub qos: QoSProfile,
 }
 
 impl<'a> PublisherOptions<'a> {
     /// Initialize a new [`PublisherOptions`] with default settings.
-    pub fn new(topic: &'a str) -> Self {
+    pub fn new(topic: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            topic,
+            topic: topic.into(),
             qos: QoSProfile::topics_default(),
         }
     }
@@ -306,7 +306,7 @@ impl<'a> PublisherOptions<'a> {
 impl<'a, T: IntoPrimitiveOptions<'a>> From<T> for PublisherOptions<'a> {
     fn from(value: T) -> Self {
         let primitive = value.into_primitive_options();
-        let mut options = Self::new(primitive.name);
+        let mut options = Self::new(primitive.name.clone());
         primitive.apply_to(&mut options.qos);
         options
     }
